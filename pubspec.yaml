@@ -62,4 +62,4 @@ flutter:
     - assets/vhshr.jpg
     - assets/vhs_logo.png
     - assets/eltrive_time_app.png
-    - assets/service-account.json
+    - shorebird.yaml
