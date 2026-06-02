@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shorebird_code_push/shorebird_code_push.dart';
 
 import 'firebase_options.dart';
 import 'login_screen.dart';
@@ -212,9 +213,24 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  final _shorebirdCodePush = ShorebirdCodePush();
+
   @override
   void initState() {
     super.initState();
+    _checkForUpdatesAndLogin();
+  }
+
+  Future<void> _checkForUpdatesAndLogin() async {
+    try {
+      final isUpdateAvailable = await _shorebirdCodePush.isNewPatchAvailableForDownload();
+      if (isUpdateAvailable) {
+        await _shorebirdCodePush.downloadUpdateIfAvailable();
+        debugPrint('Shorebird update downloaded successfully! It will apply on next restart.');
+      }
+    } catch (e) {
+      debugPrint('Shorebird update check failed: $e');
+    }
     _checkLoginStatus();
   }
 
