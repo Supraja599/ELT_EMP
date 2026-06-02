@@ -136,29 +136,7 @@ void callbackDispatcher() {
         }
       } catch (e) {
         print('Workmanager error: $e');
-
-        // Optional: Show error notification too
-        final bgPlugin = FlutterLocalNotificationsPlugin();
-        await bgPlugin.initialize(
-          const InitializationSettings(
-            android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-          ),
-        );
-        await bgPlugin.show(
-          999, // fixed id for errors
-          'Background Location Failed',
-          'Error: $e → will retry later',
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'attendance_channel_id',
-              'Attendance Notifications',
-              importance: Importance.high,
-              priority: Priority.high,
-            ),
-          ),
-        );
-
-        // your existing pending + retry logic...
+        // Silent error tracking in background - no notification spam
         return false;
       }
     }
@@ -211,6 +189,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   bool isCheckedIn = false;
   Duration workingDuration = Duration.zero;
   DateTime? sessionStart;
+  DateTime? _lastReminderDate;
   List<Map<String, dynamic>> empShifts = [];
   String? selectedShift;
   bool isShiftsLoading = true;
@@ -231,6 +210,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   bool _isConnected = true;
   bool _isNoInternetDialogShowing = false;
   bool isAdminUser = false;
+  String _companyLogoUrl = "";
 
   @override
   void initState() {
@@ -245,6 +225,15 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     _initializeWorkmanager();
     _initializeConnectivityMonitoring();
     _loadShiftsAsync();
+    _loadCompanyLogo();
+  }
+
+  Future<void> _loadCompanyLogo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final logo = prefs.getString("companyLogo") ?? "";
+    if (logo.isNotEmpty && mounted) {
+      setState(() => _companyLogoUrl = logo);
+    }
   }
 
   Future<void> _initNotifications() async {
@@ -648,9 +637,15 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final lastOpenedDate = prefs.getString('last_opened_date') ?? '';
 
     if (storedEmpId != widget.empId) {
+      final savedLogo = prefs.getString('companyLogo') ?? '';
+      final savedRole = prefs.getString('userRole') ?? '';
+      final savedFcm  = prefs.getString('fcm_token') ?? '';
       await prefs.clear();
       await prefs.setString(_prefKeyEmpId, widget.empId);
       await prefs.setString('last_opened_date', todayStr);
+      if (savedLogo.isNotEmpty) await prefs.setString('companyLogo', savedLogo);
+      if (savedRole.isNotEmpty) await prefs.setString('userRole', savedRole);
+      if (savedFcm.isNotEmpty)  await prefs.setString('fcm_token', savedFcm);
       print('Cleared SharedPreferences for new empId: ${widget.empId}');
       isCheckedIn = false;
       isAllowedToCheckIn = true;
@@ -869,11 +864,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     if (!await Permission.locationAlways.isGranted) {
       final status = await Permission.locationAlways.request();
       if (!status.isGranted) {
-        _handleError(
-          'Background location permission denied',
-          Exception('Background location permission required'),
-        );
-        return;
+        print('Background location permission denied - continuing in foreground mode silently');
       }
     }
 
@@ -1113,18 +1104,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           await prefs.setString(_prefKeySelectedShift, '');
         }
       } catch (e) {
-        print('Background location update failed: $e');
-        await bgPlugin.show(
-          0,
-          'Background Error',
-          'Location update failed: $e',
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'attendance_channel_id',
-              'Attendance Notifications',
-            ),
-          ),
-        );
+        print('Background location update failed silently: $e');
       }
     });
 
@@ -1420,7 +1400,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
         setState(() {
           empShifts = newShifts;
-          isShiftSelectable = !isCheckedIn;
+          isShiftSelectable = true;
         });
 
         if (!isCheckedIn) {
@@ -1522,9 +1502,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         }
         setState(() {
           isCheckedIn = data['current_status'] == 'checked_in';
-          isAllowedToCheckIn = data['is_allowed_to_check_in'] == 'true';
-          isAllowedToCheckOut = data['is_allowed_to_check_out'] == 'true';
-          isShiftSelectable = !isCheckedIn;
+          isAllowedToCheckIn = !isCheckedIn;
+          isAllowedToCheckOut = isCheckedIn;
+          isShiftSelectable = true;
           selectedShift = isCheckedIn ? shiftId : null;
           workingDuration = _parseDuration(
             data['cumulative_working_hours'] ?? '00:00:00',
@@ -1798,10 +1778,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       return;
     }
 
-    bool confirmed = await _showConfirmationDialog(
-      context,
-      'Are you sure you want to check out?',
-    );
+    bool confirmed = await _showLogoutConfirmationDialog(context);
     if (!confirmed) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1906,6 +1883,17 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           title: 'Check-Out Success',
           body: '${data['message'] ?? 'Checked out at $checkOutTime'}. Total: $totalWorkingHours',
         );
+
+        // Clear session and navigate to Login Screen on successful checkout
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+        debugPrint('Cleared SharedPreferences for session reset on checkout');
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        }
       } else if (data['message']?.toLowerCase().contains('invalid token') ?? false) {
         await _showInvalidTokenDialog();
         await _showNotification(title: 'Session Expired', body: 'Please log in again.');
@@ -1983,6 +1971,30 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(true),
                   child: const Text('Yes'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+  }
+
+  Future<bool> _showLogoutConfirmationDialog(BuildContext context) async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Logout Confirmation'),
+              content: const Text('Are you sure you want to logout?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('OK'),
                 ),
               ],
             );
@@ -2081,6 +2093,50 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     setState(() {
       currentTime = DateFormat('hh:mm:ss a').format(now);
     });
+
+    // Check for 9:15 AM Check-In Reminder
+    if (now.hour == 9 && now.minute == 15 && !isCheckedIn) {
+      final today = DateTime(now.year, now.month, now.day);
+      if (_lastReminderDate == null || _lastReminderDate != today) {
+        _lastReminderDate = today;
+        _showCheckInReminder();
+      }
+    }
+  }
+
+  Future<void> _showCheckInReminder() async {
+    // 1. Show local push notification
+    await _showNotification(
+      title: 'Shift Reminder',
+      body: "It's 9:15 AM! Don't forget to check in for your shift.",
+    );
+
+    // 2. Show in-app popup dialog if mounted
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text(
+            'Check-In Reminder',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text(
+            "It's 9:15 AM! Don't forget to check in to record your attendance.",
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'OK',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Duration _parseDuration(String timeStr) {
@@ -2195,61 +2251,79 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         return SingleChildScrollView(
           child: Column(
             children: [
-            const SizedBox(height: 50),
+            const SizedBox(height: 12),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (isAdminUser)
-                    Positioned(
-                      left: 0,
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.dashboard_rounded,
-                          size: 30,
-                          color: Colors.teal,
-                        ),
-                        tooltip: 'Admin Dashboard',
-                        onPressed: () {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => AdminPage(
-                                empName: widget.empName,
-                              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: SizedBox(
+                height: 90,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (isAdminUser)
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: Center(
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.dashboard_rounded,
+                              size: 30,
+                              color: Colors.teal,
                             ),
-                          );
-                        },
+                            tooltip: 'Admin Dashboard',
+                            onPressed: () {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => AdminPage(
+                                    empName: widget.empName,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                       ),
+                    Center(
+                      child: _companyLogoUrl.isNotEmpty
+                          ? Image.network(
+                              _companyLogoUrl,
+                              height: 80,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) =>
+                                  Image.asset('assets/eltrive_plan.png', height: 80),
+                            )
+                          : Image.asset('assets/eltrive_plan.png', height: 80),
                     ),
-                  Center(
-                    child: Image.asset('assets/eltrive_plan.png', height: 60),
-                  ),
-                  Positioned(
-                    right: 0,
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.menu,
-                        size: 30,
-                        color: Colors.black87,
-                      ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder:
-                                (_) => EmpProfile(
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.menu,
+                            size: 30,
+                            color: Colors.black87,
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EmpProfile(
                                   empId: widget.empId,
                                   empName: widget.empName,
                                   authToken: widget.authToken,
                                 ),
-                          ),
-                        );
-                      },
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 20),

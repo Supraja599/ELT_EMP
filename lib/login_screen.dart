@@ -246,6 +246,8 @@ class _LoginScreenState extends State<LoginScreen> {
           debugPrint('🆔 Login success - Role: $role, Emp ID: $empId, Auth Token: ${authToken.substring(0, 20)}...');
 
           // Save login data
+          final companyLogo = json['company_logo']?.toString() ?? "";
+
           await prefs.setString("savedUserId", userId);
           await prefs.setString("savedPassword", password);
           await prefs.setString("authToken", authToken);
@@ -254,6 +256,7 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setString("deviceSerialNumber", deviceId);
           await prefs.setString("userRole", role);
           await prefs.setString("companyId", companyId);
+          await prefs.setString("companyLogo", companyLogo);
 
           // ── UPLOAD FCM TOKEN TO SERVER ───────────────────────
           if (fcmToken.isNotEmpty) {
@@ -353,60 +356,173 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const SizedBox(height: 80),
-          Center(
-            child: Image.asset('assets/eltrive_plan.png', height: 200, fit: BoxFit.contain),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFF9FAFB), Color(0xFFF3F4F6)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          const SizedBox(height: 50),
-          TextField(
-            controller: userIdController,
-            decoration: InputDecoration(
-              labelText: "Email",
-              labelStyle: const TextStyle(color: Colors.blue),
-              filled: true,
-              fillColor: Colors.grey[200],
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-          const SizedBox(height: 25),
-          TextField(
-            controller: passwordController,
-            obscureText: !isPasswordVisible,
-            decoration: InputDecoration(
-              labelText: "Password",
-              labelStyle: const TextStyle(color: Colors.blue),
-              filled: true,
-              fillColor: Colors.grey[200],
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                  color: Colors.grey[600],
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.02),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Company Logo
+                      Center(
+                        child: Image.asset(
+                          'assets/eltrive_logo.png',
+                          height: 120,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Center(
+                        child: Text(
+                          "Welcome Back",
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF111827),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Center(
+                        child: Text(
+                          "Log in to your ELTRIVE account",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Email Field
+                      TextField(
+                        controller: userIdController,
+                        keyboardType: TextInputType.emailAddress,
+                        style: const TextStyle(color: Color(0xFF111827), fontSize: 15),
+                        decoration: InputDecoration(
+                          labelText: "Email",
+                          labelStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+                          floatingLabelStyle: const TextStyle(color: Color(0xFF1AEA24), fontWeight: FontWeight.w600),
+                          prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF9CA3AF), size: 20),
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Color(0xFF1AEA24), width: 2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Password Field
+                      TextField(
+                        controller: passwordController,
+                        obscureText: !isPasswordVisible,
+                        style: const TextStyle(color: Color(0xFF111827), fontSize: 15),
+                        decoration: InputDecoration(
+                          labelText: "Password",
+                          labelStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+                          floatingLabelStyle: const TextStyle(color: Color(0xFF1AEA24), fontWeight: FontWeight.w600),
+                          prefixIcon: const Icon(Icons.lock_outlined, color: Color(0xFF9CA3AF), size: 20),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                              color: const Color(0xFF9CA3AF),
+                              size: 20,
+                            ),
+                            onPressed: () => setState(() => isPasswordVisible = !isPasswordVisible),
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF9FAFB),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Color(0xFF1AEA24), width: 2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Login Button
+                      SizedBox(
+                        height: 54,
+                        child: ElevatedButton(
+                          onPressed: isLoading ? null : login,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1AEA24),
+                            foregroundColor: Colors.black,
+                            elevation: 0,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: isLoading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.black,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : const Text(
+                                  "Login",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                onPressed: () => setState(() => isPasswordVisible = !isPasswordVisible),
-              ),
+              ],
             ),
           ),
-          const SizedBox(height: 35),
-          SizedBox(
-            height: 50,
-            child: ElevatedButton(
-              onPressed: isLoading ? null : login,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-              ),
-              child: isLoading
-                  ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                  : const Text("Login", style: TextStyle(fontSize: 18, color: Colors.white)),
-            ),
-          ),
-          const SizedBox(height: 40),
-        ],
+        ),
       ),
     );
   }

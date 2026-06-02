@@ -26,8 +26,8 @@ android {
         applicationId = "com.ELT_EMP.as_f"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
-        versionCode = 8
-        versionName = "ELT_8.0"
+        versionCode = 9
+        versionName = "ELT_9.0"
     }
 
     buildTypes {

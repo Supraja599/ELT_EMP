@@ -107,18 +107,46 @@ class _EmpProfileState extends State<EmpProfile> {
     return null;
   }
 
-  Future<void> _logout() async {
+  Future<void> _logout({bool showConfirmation = true}) async {
+    if (showConfirmation) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Logout Confirmation'),
+            content: const Text('Are you sure you want to logout?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      ) ??
+      false;
+
+      if (!confirmed) return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const SplashScreen()),
-          (route) => false,
-    );
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const SplashScreen()),
+        (route) => false,
+      );
+    }
   }
 
   Future<void> _forceLoginAgain() async {
-    await _logout();
+    await _logout(showConfirmation: false);
   }
 
   @override
