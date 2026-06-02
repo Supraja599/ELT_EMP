@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "271638878735",
+    "project_id": "elt-emp",
+    "storage_bucket": "elt-emp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:271638878735:android:b3d16c025b3c54b8a0a17a",
+        "android_client_info": {
+          "package_name": "com.ELT_EMP.as_f"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDFl0uH6tqFSDxiUJSaDUjXw8YWZJ9TIn8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
