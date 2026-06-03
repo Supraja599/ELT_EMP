@@ -643,6 +643,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       await prefs.clear();
       await prefs.setString(_prefKeyEmpId, widget.empId);
       await prefs.setString('last_opened_date', todayStr);
+      await prefs.setString('authToken', widget.authToken);
+      await prefs.setString('deviceSerialNumber', widget.deviceSerialNumber);
       if (savedLogo.isNotEmpty) await prefs.setString('companyLogo', savedLogo);
       if (savedRole.isNotEmpty) await prefs.setString('userRole', savedRole);
       if (savedFcm.isNotEmpty)  await prefs.setString('fcm_token', savedFcm);
@@ -698,8 +700,11 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
     final userRole = prefs.getString('userRole') ?? '';
     setState(() {
-      isAdminUser = userRole == 'admin' || widget.empId == '0';
+      isAdminUser = userRole == 'admin' || widget.empId == '0' || widget.empId == 'admin';
     });
+    if (isAdminUser) {
+      await prefs.setString('userRole', 'admin');
+    }
 
     print(
       'Initial state - isCheckedIn: $isCheckedIn, isAllowedToCheckIn: $isAllowedToCheckIn, isAllowedToCheckOut: $isAllowedToCheckOut, selectedShift: $selectedShift',
@@ -1016,8 +1021,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final prefs = await SharedPreferences.getInstance();
     bool isCheckedIn = prefs.getBool(_prefKeyCheckedIn) ?? false;
     String? empId = prefs.getString(_prefKeyEmpId);
-    String? authToken;
-    String? deviceSerialNumber;
+    String? authToken = prefs.getString('authToken');
+    String? deviceSerialNumber = prefs.getString('deviceSerialNumber');
     String? selectedShift = prefs.getString(_prefKeySelectedShift);
 
     // Listen for state updates from main app
@@ -1127,14 +1132,18 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+      final storedAuthToken = prefs.getString('authToken') ?? '';
+      final storedEmpId = prefs.getString(_prefKeyEmpId) ?? '';
+      final storedDeviceSerial = prefs.getString('deviceSerialNumber') ?? '';
+
       final payload = {
-        'auth_token': widget.authToken,
-        'emp_id': widget.empId,
+        'auth_token': storedAuthToken,
+        'emp_id': storedEmpId,
         'shift_id': prefs.getString(_prefKeySelectedShift),
         'latitude': position.latitude.toString(),
         'longitude': position.longitude.toString(),
         'timestamp': DateTime.now().toUtc().toIso8601String(),
-        'device_serial_number': widget.deviceSerialNumber,
+        'device_serial_number': storedDeviceSerial,
       };
       if (_isConnected) {
         await _sendLocationUpdateWithRetry(payload, prefs);
@@ -1146,10 +1155,10 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         finalLocationTask,
         frequency: const Duration(minutes: 1),
         inputData: {
-          'authToken': widget.authToken,
-          'empId': widget.empId,
+          'authToken': storedAuthToken,
+          'empId': storedEmpId,
           'shiftId': prefs.getString(_prefKeySelectedShift),
-          'deviceSerialNumber': widget.deviceSerialNumber,
+          'deviceSerialNumber': storedDeviceSerial,
         },
         constraints: Constraints(
           networkType: NetworkType.connected,
@@ -1238,6 +1247,55 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       title: 'No Internet',
       body: 'Check-in/out requires connection',
     );
+  }
+
+  void _populateDefaultShifts() {
+    final nowForDefaults = DateTime.now();
+    final defaultsDateStr = '${nowForDefaults.year}-${nowForDefaults.month.toString().padLeft(2, '0')}-${nowForDefaults.day.toString().padLeft(2, '0')}';
+    
+    final List<Map<String, dynamic>> defaultShifts = [
+      {
+        'id': '1',
+        'name': 'General Shift : 09:00 AM - 05:00 PM',
+        'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 9, 0),
+        'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 17, 0),
+        'isActive': true,
+        'date': defaultsDateStr,
+      },
+      {
+        'id': '2',
+        'name': 'A Shift : 06:00 AM - 02:00 PM',
+        'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 6, 0),
+        'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 14, 0),
+        'isActive': true,
+        'date': defaultsDateStr,
+      },
+      {
+        'id': '3',
+        'name': 'B Shift : 02:00 PM - 10:00 PM',
+        'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 14, 0),
+        'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 22, 0),
+        'isActive': true,
+        'date': defaultsDateStr,
+      },
+      {
+        'id': '4',
+        'name': 'C Shift : 10:00 PM - 06:00 AM',
+        'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 22, 0),
+        'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 6, 0).add(const Duration(days: 1)),
+        'isActive': true,
+        'date': defaultsDateStr,
+      }
+    ];
+
+    setState(() {
+      empShifts = defaultShifts;
+      isShiftSelectable = true;
+    });
+
+    if (!isCheckedIn) {
+      _autoSelectShift();
+    }
   }
 
   Future<void> fetchShifts() async {
@@ -1410,12 +1468,14 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           false) {
         await _showInvalidTokenDialog();
       } else {
+        _populateDefaultShifts();
         _handleError(
           'Failed to fetch shifts',
           Exception(data['message'] ?? 'Unknown error'),
         );
       }
     } catch (e) {
+      _populateDefaultShifts();
       _handleError('Error fetching shifts', e);
     } finally {
       setState(() => isShiftsLoading = false);
@@ -1778,7 +1838,10 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       return;
     }
 
-    bool confirmed = await _showLogoutConfirmationDialog(context);
+    bool confirmed = await _showConfirmationDialog(
+      context,
+      'Are you sure you want to check out?',
+    );
     if (!confirmed) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1884,16 +1947,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           body: '${data['message'] ?? 'Checked out at $checkOutTime'}. Total: $totalWorkingHours',
         );
 
-        // Clear session and navigate to Login Screen on successful checkout
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.clear();
-        debugPrint('Cleared SharedPreferences for session reset on checkout');
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-          );
-        }
+        // Do not clear SharedPreferences or navigate to Login Screen on successful checkout,
+        // so that the user remains logged in.
       } else if (data['message']?.toLowerCase().contains('invalid token') ?? false) {
         await _showInvalidTokenDialog();
         await _showNotification(title: 'Session Expired', body: 'Please log in again.');
@@ -1979,29 +2034,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         false;
   }
 
-  Future<bool> _showLogoutConfirmationDialog(BuildContext context) async {
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: const Text('Logout Confirmation'),
-              content: const Text('Are you sure you want to logout?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('OK'),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-  }
+
 
   Future<void> _openLocationSettings() async {
     await Geolocator.openLocationSettings();
@@ -2248,8 +2281,14 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         print(
           'Button State: isAllowedToCheckIn=$isAllowedToCheckIn, isAllowedToCheckOut=$isAllowedToCheckOut, selectedShift=$selectedShift, isProcessing=$isProcessing, activeShift=${empShifts.any((shift) => shift['id'] == selectedShift && shift['isActive'] as bool)}',
         );
-        return SingleChildScrollView(
-          child: Column(
+        return RefreshIndicator(
+          onRefresh: () async {
+            await fetchShifts();
+            await fetchStatus();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
             children: [
             const SizedBox(height: 12),
             Padding(
@@ -2618,6 +2657,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             ),
           ],
         ),
+      ),
       );
       }
       switch (index) {

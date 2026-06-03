@@ -370,6 +370,13 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // Topmost Logo
+                Image.asset(
+                  'assets/eltrive_logo.png',
+                  height: 155,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 20),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(32),
@@ -392,38 +399,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Company Logo
-                      Center(
-                        child: Image.asset(
-                          'assets/eltrive_logo.png',
-                          height: 120,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Center(
-                        child: Text(
-                          "Welcome Back",
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF111827),
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Center(
-                        child: Text(
-                          "Log in to your ELTRIVE account",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF6B7280),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-
                       // Email Field
                       TextField(
                         controller: userIdController,
@@ -518,6 +493,28 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 32),
+                // Vehicles at the bottom
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Image.asset(
+                        'assets/eltrive_cargo_blue.png',
+                        height: 125,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Image.asset(
+                        'assets/eltrive_sweeper_blue.png',
+                        height: 125,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
