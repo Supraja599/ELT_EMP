@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'services/api_service.dart';
+import 'check_in_out_screen.dart';
 
 class Requests extends StatefulWidget {
   final String empId;
@@ -9,6 +10,7 @@ class Requests extends StatefulWidget {
   final String authToken;
   final String deviceSerialNumber;
   final String companyId;
+  final bool isAdmin;
 
   const Requests({
     super.key,
@@ -17,6 +19,7 @@ class Requests extends StatefulWidget {
     required this.authToken,
     required this.deviceSerialNumber,
     required this.companyId,
+    this.isAdmin = false,
   });
 
   @override
@@ -26,6 +29,47 @@ class Requests extends StatefulWidget {
 class _RequestsState extends State<Requests> {
   List<ApiTask> projects = [];
   bool isLoading = true;
+
+  Future<bool> _onWillPop() async {
+    bool? exit = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Go Back?"),
+        content: const Text(
+            "Are you sure you want to go back to CheckInOutScreen?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text("No"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text("Yes"),
+          ),
+        ],
+      ),
+    );
+
+    if (exit == true) {
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => CheckInOutScreen(
+              empId: widget.empId,
+              empName: widget.empName,
+              authToken: widget.authToken,
+              companyId: widget.companyId,
+              deviceSerialNumber: widget.deviceSerialNumber,
+              isAdmin: widget.isAdmin,
+            ),
+          ),
+          (route) => false,
+        );
+      }
+      return false;
+    }
+    return false;
+  }
 
   @override
   void initState() {
@@ -59,7 +103,9 @@ class _RequestsState extends State<Requests> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       body: Column(
         children: [
@@ -87,7 +133,7 @@ class _RequestsState extends State<Requests> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => _onWillPop(),
                 ),
                 const SizedBox(width: 8),
                 const Text(
@@ -309,8 +355,9 @@ class _RequestsState extends State<Requests> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ================= SUBPROJECT SCREEN =================

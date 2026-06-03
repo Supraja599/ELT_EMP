@@ -10,6 +10,7 @@ class LeaveScreen extends StatefulWidget {
   final String empName;
   final String deviceSerialNumber;
   final String companyId;
+  final bool isAdmin;
 
   const LeaveScreen({
     Key? key,
@@ -18,7 +19,7 @@ class LeaveScreen extends StatefulWidget {
     required this.empName,
     required this.deviceSerialNumber,
     required this.companyId, // ✅ REQUIRED
-
+    this.isAdmin = false,
   }) : super(key: key);
 
   @override
@@ -76,7 +77,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
             authToken: widget.authToken,
             companyId: widget.companyId, // ✅ ADD
             deviceSerialNumber:  widget.deviceSerialNumber,
-
+            isAdmin: widget.isAdmin,
           ),
         ),
             (route) => false,

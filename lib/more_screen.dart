@@ -9,6 +9,7 @@ class MoreScreen extends StatelessWidget {
   final String empName;
   final String deviceSerialNumber;
   final String companyId;
+  final bool isAdmin;
 
   const MoreScreen({
     Key? key,
@@ -17,6 +18,7 @@ class MoreScreen extends StatelessWidget {
     required this.empName,
     required this.deviceSerialNumber,
     required this.companyId,
+    this.isAdmin = false,
   }) : super(key: key);
 
   /// Check internet connectivity
@@ -52,6 +54,7 @@ class MoreScreen extends StatelessWidget {
           authToken: authToken,
           deviceSerialNumber: deviceSerialNumber,
           companyId: companyId,
+          isAdmin: isAdmin,
         ),
       ),
           (route) => false,

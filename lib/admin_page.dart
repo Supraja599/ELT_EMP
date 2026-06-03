@@ -507,6 +507,7 @@ class _AdminPageState extends State<AdminPage>
                       authToken: token,
                       deviceSerialNumber: deviceSerial,
                       companyId: companyId,
+                      isAdmin: true,
                     ),
                   ),
                 );

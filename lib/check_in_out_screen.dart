@@ -159,6 +159,7 @@ class CheckInOutScreen extends StatefulWidget {
   final String authToken;
   final String deviceSerialNumber;
   final String companyId;
+  final bool isAdmin;
 
   const CheckInOutScreen({
     super.key,
@@ -167,6 +168,7 @@ class CheckInOutScreen extends StatefulWidget {
     required this.authToken,
     required this.deviceSerialNumber,
     required this.companyId, // ✅
+    this.isAdmin = false,
   });
 
   @override
@@ -507,6 +509,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   Future<void> _loadShiftsAsync() async {
     try {
       setState(() => isShiftsLoading = true);
+      await _initializeApp();
       if (!_isConnected) {
         if (mounted && !_isNoInternetDialogShowing) {
           _showNoInternetDialog();
@@ -514,7 +517,6 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         setState(() => isShiftsLoading = false);
         return;
       }
-      await _initializeApp();
       await _syncPendingLocations();
       setState(() => isShiftsLoading = false);
     } catch (e, stackTrace) {
@@ -622,10 +624,16 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   }
 
   Future<void> _initializeApp() async {
-    await _checkAppUpdate();
-    await _requestBatteryOptimization();
+    unawaited(_checkAppUpdate());
+    unawaited(_requestBatteryOptimization());
     final prefs = await SharedPreferences.getInstance();
     final storedEmpId = prefs.getString(_prefKeyEmpId);
+
+    print('DEBUG ADMIN CHECK START:');
+    print('  - widget.empId: "${widget.empId}"');
+    print('  - storedEmpId in prefs: "$storedEmpId"');
+    print('  - userRole in prefs: "${prefs.getString('userRole')}"');
+    print('  - savedIsAdmin in prefs: "${prefs.getBool('isAdminUser')}"');
 
     if (widget.empId.isEmpty) {
       _handleError('Invalid employee ID', Exception('widget.empId is empty'));
@@ -640,6 +648,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       final savedLogo = prefs.getString('companyLogo') ?? '';
       final savedRole = prefs.getString('userRole') ?? '';
       final savedFcm  = prefs.getString('fcm_token') ?? '';
+      final savedIsAdmin = prefs.getBool('isAdminUser') ?? false;
       await prefs.clear();
       await prefs.setString(_prefKeyEmpId, widget.empId);
       await prefs.setString('last_opened_date', todayStr);
@@ -648,6 +657,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       if (savedLogo.isNotEmpty) await prefs.setString('companyLogo', savedLogo);
       if (savedRole.isNotEmpty) await prefs.setString('userRole', savedRole);
       if (savedFcm.isNotEmpty)  await prefs.setString('fcm_token', savedFcm);
+      if (savedIsAdmin) await prefs.setBool('isAdminUser', true);
       print('Cleared SharedPreferences for new empId: ${widget.empId}');
       isCheckedIn = false;
       isAllowedToCheckIn = true;
@@ -699,11 +709,17 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     }
 
     final userRole = prefs.getString('userRole') ?? '';
+    final savedIsAdmin = prefs.getBool('isAdminUser') ?? false;
     setState(() {
-      isAdminUser = userRole == 'admin' || widget.empId == '0' || widget.empId == 'admin';
+      isAdminUser = widget.isAdmin || userRole == 'admin' || widget.empId == '0' || widget.empId == 'admin' || savedIsAdmin;
     });
+    print('DEBUG ADMIN CHECK END:');
+    print('  - calculated isAdminUser: $isAdminUser');
+    print('  - userRole: "$userRole"');
+    print('  - savedIsAdmin: $savedIsAdmin');
     if (isAdminUser) {
       await prefs.setString('userRole', 'admin');
+      await prefs.setBool('isAdminUser', true);
     }
 
     print(
@@ -1203,6 +1219,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   void _handleError(String message, dynamic error, [StackTrace? stackTrace]) {
     print('$message: $error${stackTrace != null ? '\n$stackTrace' : ''}');
     if (mounted) {
+      if (isAdminUser) {
+        return; // Don't show error SnackBars or notifications for admins
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$message: ${error.toString().split(':').last.trim()}'),
@@ -2667,8 +2686,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             empName: widget.empName,
             authToken: widget.authToken,
             companyId: widget.companyId,
-            // ✅ ADD
             deviceSerialNumber: widget.deviceSerialNumber,
+            isAdmin: isAdminUser,
           );
         case 2:
           return Requests(
@@ -2676,9 +2695,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             empName: widget.empName,
             authToken: widget.authToken,
             companyId: widget.companyId,
-
-            // ✅ ADD
             deviceSerialNumber: widget.deviceSerialNumber,
+            isAdmin: isAdminUser,
           );
         case 3:
           return ExpensesScreen(
@@ -2686,8 +2704,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             empName: widget.empName,
             authToken: widget.authToken,
             companyId: widget.companyId,
-
             deviceSerialNumber: widget.deviceSerialNumber,
+            isAdmin: isAdminUser,
           );
         case 4:
           return MoreScreen(
@@ -2695,9 +2713,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             empName: widget.empName,
             authToken: widget.authToken,
             companyId: widget.companyId,
-
-            // ✅ ADD
             deviceSerialNumber: widget.deviceSerialNumber,
+            isAdmin: isAdminUser,
           );
         default:
           return Container();
