@@ -103,8 +103,9 @@ class _RequestsState extends State<Requests> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) { if (!didPop) _onWillPop(); },
       child: Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       body: Column(

@@ -67,7 +67,7 @@ class _PayslipScreenState extends State<PayslipScreen> {
             final slip = payslips[index];
             return Card(
               elevation: 4,
-              shadowColor: Colors.blue.withOpacity(0.2),
+              shadowColor: Colors.blue.withValues(alpha: 0.2),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),

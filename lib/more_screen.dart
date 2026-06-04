@@ -23,8 +23,8 @@ class MoreScreen extends StatelessWidget {
 
   /// Check internet connectivity
   Future<bool> _hasInternet() async {
-    var result = await Connectivity().checkConnectivity();
-    return result != ConnectivityResult.none;
+    final results = await Connectivity().checkConnectivity();
+    return results.isNotEmpty && !results.contains(ConnectivityResult.none);
   }
 
   /// Show no internet dialog
@@ -76,8 +76,9 @@ class MoreScreen extends StatelessWidget {
   // ✅ WORK UPDATE UI (Company ID = 6)
   // ─────────────────────────────────────────────
   Widget _buildWorkUpdateUI(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () => _onWillPop(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) { if (!didPop) _onWillPop(context); },
       child: Scaffold(
         backgroundColor: Colors.grey[100],
         appBar: AppBar(
@@ -158,8 +159,9 @@ class MoreScreen extends StatelessWidget {
   // ❌ FEATURE NOT AVAILABLE UI (Other companies)
   // ─────────────────────────────────────────────
   Widget _buildFeatureNotAvailableUI(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () => _onWillPop(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) { if (!didPop) _onWillPop(context); },
       child: Scaffold(
         backgroundColor: Colors.grey[100],
         body: SafeArea(

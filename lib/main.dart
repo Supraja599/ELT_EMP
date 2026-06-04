@@ -261,6 +261,7 @@ class _SplashScreenState extends State<SplashScreen> {
             builder: (_) => isAdmin
                 ? AdminPage(
               empName: empName,
+              companyId: companyId,
               pendingCheckinRequests: pendingCheckin,
               pendingCheckoutRequests: pendingCheckout,
               pendingDeviceRequests: pendingDevice,

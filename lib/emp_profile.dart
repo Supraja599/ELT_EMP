@@ -258,7 +258,7 @@ class _EmpProfileState extends State<EmpProfile> {
                                 border: Border.all(color: Colors.white, width: 3),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.teal.shade700.withOpacity(0.15),
+                                    color: Colors.teal.shade700.withValues(alpha: 0.15),
                                     blurRadius: 8,
                                     spreadRadius: 1,
                                     offset: const Offset(0, 3),

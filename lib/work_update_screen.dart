@@ -81,7 +81,7 @@ class _WorkUpdateScreenState extends State<WorkUpdateScreen> {
           p.administrativeArea,
           p.postalCode,
           p.country,
-        ].where((e) => e != null && e!.isNotEmpty).join(", ");
+        ].where((e) => e != null && e.isNotEmpty).join(', ');
 
         setState(() => _locationController.text = address);
       }
@@ -92,8 +92,8 @@ class _WorkUpdateScreenState extends State<WorkUpdateScreen> {
 
   // ================= INTERNET =================
   Future<bool> _hasInternet() async {
-    var result = await Connectivity().checkConnectivity();
-    return result != ConnectivityResult.none;
+    final results = await Connectivity().checkConnectivity();
+    return results.isNotEmpty && !results.contains(ConnectivityResult.none);
   }
 
   // ================= SUBMIT =================

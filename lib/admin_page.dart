@@ -13,18 +13,17 @@ import 'check_in_out_screen.dart';
 /// ---------------------------------------------------------------------------
 class AdminPage extends StatefulWidget {
   final String empName;
+  final String companyId;
 
-  // Existing lists
   final List<Map<String, dynamic>> pendingCheckinRequests;
   final List<Map<String, dynamic>> pendingCheckoutRequests;
   final List<Map<String, dynamic>> pendingDeviceRequests;
-
-  // NEW – leave requests (same shape as the others, just add a "type":"leave")
   final List<Map<String, dynamic>> pendingLeaveRequests;
 
   const AdminPage({
     super.key,
     required this.empName,
+    this.companyId = '',
     this.pendingCheckinRequests = const [],
     this.pendingCheckoutRequests = const [],
     this.pendingDeviceRequests = const [],
@@ -44,9 +43,15 @@ class _AdminPageState extends State<AdminPage>
   late List<Map<String, dynamic>> _checkout;
   late List<Map<String, dynamic>> _device;
   late List<Map<String, dynamic>> _leave;
+  List<Map<String, dynamic>> _ot = [];
+  bool _isLoadingOt = false;
+
+  // company_id "1" = Eltrive, "2" = VHS hospital
+  // Read directly from widget — no async loading needed
+  bool get _isHospitalAccount => widget.companyId == '2';
 
   late TabController _tabController;
-  int _selectedTabIndex = 0; // 0=checkin, 1=checkout, 2=device, 3=leave
+  int _selectedTabIndex = 0; // 0=checkin, 1=checkout, 2=device, 3=leave, 4=ot(hospital only)
 
   // Each tab works on its own list + a carousel index
   late List<Map<String, dynamic>> _filteredRequests;
@@ -69,8 +74,8 @@ class _AdminPageState extends State<AdminPage>
     _device = widget.pendingDeviceRequests.map((e) => Map<String, dynamic>.from(e)).toList();
     _leave = widget.pendingLeaveRequests.map((e) => Map<String, dynamic>.from(e)).toList();
 
-    // Initialise tab controller (4 tabs)
-    _tabController = TabController(length: 4, vsync: this);
+    // 4 tabs for Eltrive, 5 tabs for VHS hospital (adds OT/Late tab)
+    _tabController = TabController(length: _isHospitalAccount ? 5 : 4, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
       setState(() {
@@ -88,9 +93,11 @@ class _AdminPageState extends State<AdminPage>
             'device:${_device.length} '
             'leave:${_leave.length}');
 
-    // Auto-fetch latest requests from server on screen load
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshPendingRequests();
+    // companyId comes from widget — no async loading needed
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _refreshPendingRequests();
+      // OT requests are only relevant for hospital / VHS accounts
+      if (_isHospitalAccount) _refreshOtRequests();
     });
   }
 
@@ -128,6 +135,10 @@ class _AdminPageState extends State<AdminPage>
             .map((e) => {...e, "type": "leave"})
             .toList();
         break;
+      case 4:
+        // OT tab uses its own widget; _filteredRequests not needed here
+        _filteredRequests = [];
+        break;
     }
 
     // Clamp carousel index after a change
@@ -148,8 +159,8 @@ class _AdminPageState extends State<AdminPage>
       return true;
     }
 
-    var connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult == ConnectivityResult.none) {
+    final connectivityResults = await Connectivity().checkConnectivity();
+    if (connectivityResults.isEmpty || connectivityResults.contains(ConnectivityResult.none)) {
       if (mounted) {
         if (useDialog) {
           await showDialog(
@@ -284,6 +295,10 @@ class _AdminPageState extends State<AdminPage>
       url = Uri.parse(
           "https://hrm.eltrive.com/api/leave-requests/${status == 'approved' ? 'approve' : 'reject'}/$parsedId");
       body = {"auth_token": token};
+    } else if (type == 'ot') {
+      // OT requests are handled by _approveOtRequest — should not reach here
+      setState(() => isLoading = false);
+      return;
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -432,6 +447,120 @@ class _AdminPageState extends State<AdminPage>
   }
 
   // -----------------------------------------------------------------------
+  // 5b. Fetch pending OT / Late / Early-Checkout requests
+  // -----------------------------------------------------------------------
+  Future<void> _refreshOtRequests() async {
+    if (!await _checkConnectivity()) return;
+    setState(() => _isLoadingOt = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken') ?? '';
+      final response = await ApiService.fetchPendingOtRequests(authToken: token);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'success') {
+          final List raw = data['requests'] ?? data['ot_requests'] ?? [];
+          setState(() {
+            _ot = raw.map((e) => Map<String, dynamic>.from(e)).toList();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('OT refresh error: $e');
+    } finally {
+      setState(() => _isLoadingOt = false);
+    }
+  }
+
+  Future<void> _approveOtRequest(
+      String requestId, String action, String empName) async {
+    final remarksController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '${action == 'approve' ? 'Approve' : 'Reject'} OT Request',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${action == 'approve' ? 'Approve' : 'Reject'} OT/Late request for $empName?'),
+            const SizedBox(height: 14),
+            TextField(
+              controller: remarksController,
+              maxLines: 2,
+              decoration: InputDecoration(
+                hintText: 'Remarks (optional)',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.all(10),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: action == 'approve' ? Colors.green : Colors.red,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              action == 'approve' ? 'Approve' : 'Reject',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    setState(() => _isLoadingOt = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken') ?? '';
+      final response = await ApiService.approveOtRequest(
+        authToken: token,
+        requestId: requestId,
+        action: action,
+        remarks: remarksController.text.trim(),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        setState(() => _ot.removeWhere((e) => e['id'].toString() == requestId));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('OT request ${action}d for $empName'),
+            backgroundColor: action == 'approve' ? Colors.green : Colors.red,
+          ));
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(data['message'] ?? 'Failed to $action request'),
+            backgroundColor: Colors.red,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      setState(() => _isLoadingOt = false);
+      remarksController.dispose();
+    }
+  }
+
+  // -----------------------------------------------------------------------
   // 6. Confirmation dialog (unchanged)
   // -----------------------------------------------------------------------
   Future<void> _showConfirmDialog(
@@ -480,11 +609,13 @@ class _AdminPageState extends State<AdminPage>
         foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.login), text: "Check-In"),
-            Tab(icon: Icon(Icons.logout), text: "Check-Out"),
-            Tab(icon: Icon(Icons.devices), text: "Device"),
-            Tab(icon: Icon(Icons.event_available), text: "Leave"),
+          tabs: [
+            const Tab(icon: Icon(Icons.login), text: "Check-In"),
+            const Tab(icon: Icon(Icons.logout), text: "Check-Out"),
+            const Tab(icon: Icon(Icons.devices), text: "Device"),
+            const Tab(icon: Icon(Icons.event_available), text: "Leave"),
+            if (_isHospitalAccount)
+              const Tab(icon: Icon(Icons.more_time_rounded), text: "OT/Late"),
           ],
         ),
         actions: [
@@ -542,7 +673,9 @@ class _AdminPageState extends State<AdminPage>
             end: Alignment.bottomRight,
           ),
         ),
-        child: Center(
+        child: (_selectedTabIndex == 4 && _isHospitalAccount)
+            ? _buildOtTab()
+            : Center(
           child: isLoading
               ? const CircularProgressIndicator()
               : _filteredRequests.isEmpty
@@ -723,6 +856,186 @@ class _AdminPageState extends State<AdminPage>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ── OT / Late / Early-Checkout approval tab ─────────────────────────────
+  Widget _buildOtTab() {
+    // Only hospital / VHS company accounts use OT approval
+    if (!_isHospitalAccount) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock_outline_rounded, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'OT / Late approval is not\nenabled for your company.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_isLoadingOt) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_ot.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.more_time_rounded, size: 64, color: Colors.green),
+            SizedBox(height: 16),
+            Text(
+              'No pending OT / Late requests',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      );
+    }
+
+    String typeLabel(String t) {
+      switch (t) {
+        case 'late_checkin': return 'Late Check-In';
+        case 'early_checkout': return 'Early Check-Out';
+        case 'overtime': return 'Overtime (OT)';
+        default: return t;
+      }
+    }
+    IconData typeIcon(String t) {
+      switch (t) {
+        case 'late_checkin': return Icons.schedule_rounded;
+        case 'early_checkout': return Icons.exit_to_app_rounded;
+        case 'overtime': return Icons.star_rounded;
+        default: return Icons.help_outline_rounded;
+      }
+    }
+    Color typeColor(String t) {
+      switch (t) {
+        case 'late_checkin': return Colors.orange;
+        case 'early_checkout': return Colors.deepOrange;
+        case 'overtime': return Colors.purple;
+        default: return Colors.grey;
+      }
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refreshOtRequests,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _ot.length,
+        itemBuilder: (ctx, i) {
+          final req = _ot[i];
+          final id = req['id']?.toString() ?? '';
+          final type = req['request_type']?.toString() ?? '';
+          final empName = '${req['first_name'] ?? req['emp_name'] ?? ''} ${req['last_name'] ?? ''}'.trim();
+          final date = req['date']?.toString() ?? '';
+          final reason = req['reason']?.toString() ?? '';
+          final duration = req['duration']?.toString() ?? '';
+          final color = typeColor(type);
+
+          return Card(
+            elevation: 4,
+            margin: const EdgeInsets.only(bottom: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(typeIcon(type), color: color, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          typeLabel(type),
+                          style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15),
+                        ),
+                      ),
+                      if (duration.isNotEmpty && duration != '00:00')
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(duration, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+                        ),
+                    ],
+                  ),
+                ),
+                // Body
+                Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.person_rounded, size: 16, color: Colors.blueAccent),
+                          const SizedBox(width: 6),
+                          Text(
+                            empName.isEmpty ? 'Employee #${req['emp_id'] ?? ''}' : empName,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today_rounded, size: 14, color: Colors.grey),
+                          const SizedBox(width: 5),
+                          Text(date, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                        ],
+                      ),
+                      if (reason.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(reason, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                      ],
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () => _approveOtRequest(id, 'approve', empName),
+                              icon: const Icon(Icons.check_rounded, color: Colors.white, size: 18),
+                              label: const Text('Approve', style: TextStyle(color: Colors.white)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () => _approveOtRequest(id, 'reject', empName),
+                              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                              label: const Text('Reject', style: TextStyle(color: Colors.white)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

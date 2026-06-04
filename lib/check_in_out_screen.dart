@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -17,12 +17,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 
-// Replace these with your actual import paths
 import 'admin_page.dart';
+import 'attendance_history_screen.dart';
 import 'leave_screen.dart';
 import 'login_screen.dart';
-import 'main.dart';
-import 'payslip_screen.dart';
+import 'ot_late_request_screen.dart';
 import 'Requests.dart';
 import 'expenses_screen.dart';
 import 'more_screen.dart';
@@ -39,20 +38,20 @@ const String finalLocationTask = "sendFinalLocationTask";
 // Add this near the top (global or in class)
 int _backgroundLocationSendCount = 0; // optional - to show how many times sent
 
-// ────────────────────────────────────────────────
-// Inside callbackDispatcher()  →  Workmanager task
-// ────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Inside callbackDispatcher()  â†’  Workmanager task
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     if (task == finalLocationTask) {
-      print('Workmanager task executed at ${DateTime.now().toIso8601String()}');
+      debugPrint('Workmanager task executed at ${DateTime.now().toIso8601String()}');
 
       try {
         final prefs = await SharedPreferences.getInstance();
         final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
         if (!isCheckedIn) {
-          print('Not checked in → skipping');
+          debugPrint('Not checked in â†’ skipping');
           return true;
         }
 
@@ -72,15 +71,15 @@ void callbackDispatcher() {
           'device_serial_number': inputData?['deviceSerialNumber'] ?? '',
         };
 
-        var connectivityResult = await Connectivity().checkConnectivity();
-        if (connectivityResult != ConnectivityResult.none) {
+        final connectivityResults = await Connectivity().checkConnectivity();
+        if (connectivityResults.isNotEmpty && !connectivityResults.contains(ConnectivityResult.none)) {
           final response = await ApiService.sendLocationUpdate(payload);
 
           final data = jsonDecode(response.body);
-          print('Workmanager Response: $data');
+          debugPrint('Workmanager Response: $data');
 
           if (response.statusCode == 200 && data['status'] == 'ok') {
-            // ──────────────── NEW: Show notification on every successful send ────────────────
+            // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ NEW: Show notification on every successful send â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             final bgPlugin = FlutterLocalNotificationsPlugin();
             await bgPlugin.initialize(
               const InitializationSettings(
@@ -117,10 +116,10 @@ void callbackDispatcher() {
               ),
             );
 
-            // ──────────────────────────────────────────────────────────────
+            // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
             if (data['auto_checkout'] == true) {
-              print('Auto-checkout done → stopping task');
+              debugPrint('Auto-checkout done â†’ stopping task');
               return true;
             }
             return true;
@@ -130,12 +129,12 @@ void callbackDispatcher() {
             return false;
           }
         } else {
-          print('No internet → storing pending');
+          debugPrint('No internet â†’ storing pending');
           await _storePendingLocation(payload, prefs);
           return false;
         }
       } catch (e) {
-        print('Workmanager error: $e');
+        debugPrint('Workmanager error: $e');
         // Silent error tracking in background - no notification spam
         return false;
       }
@@ -150,7 +149,7 @@ Future<void> _storePendingLocation(
   final pendingLocations = prefs.getStringList('pending_locations') ?? [];
   pendingLocations.add(jsonEncode(payload));
   await prefs.setStringList('pending_locations', pendingLocations);
-  print('Workmanager stored pending location: $payload');
+  debugPrint('Workmanager stored pending location: $payload');
 }
 
 class CheckInOutScreen extends StatefulWidget {
@@ -167,7 +166,7 @@ class CheckInOutScreen extends StatefulWidget {
     required this.empId,
     required this.authToken,
     required this.deviceSerialNumber,
-    required this.companyId, // ✅
+    required this.companyId, // âœ…
     this.isAdmin = false,
   });
 
@@ -207,12 +206,17 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   static const String _prefKeyPendingLocations = 'pending_locations';
   int _selectedIndex = 0;
   bool isProcessing = false;
+  bool _isSessionDialogShowing = false;
   StreamSubscription<Position>? positionStream;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   bool _isConnected = true;
   bool _isNoInternetDialogShowing = false;
   bool isAdminUser = false;
   String _companyLogoUrl = "";
+  String _companyId = "";
+
+  // Eltrive = company_id "1", VHS hospital = company_id "2"
+  bool get _isHospitalAccount => _companyId == '2';
 
   @override
   void initState() {
@@ -232,10 +236,34 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
   Future<void> _loadCompanyLogo() async {
     final prefs = await SharedPreferences.getInstance();
-    final logo = prefs.getString("companyLogo") ?? "";
-    if (logo.isNotEmpty && mounted) {
-      setState(() => _companyLogoUrl = logo);
+    final logo     = prefs.getString("companyLogo") ?? "";
+    final cId      = prefs.getString("companyId")   ?? "";
+    if (mounted) {
+      setState(() {
+        _companyLogoUrl = logo;
+        _companyId      = cId;
+      });
     }
+  }
+
+  /// Returns the correct logo widget for the logged-in employee's company.
+  /// - If the server provided a logo URL â†’ show it (network image).
+  /// - Eltrive companies (ID 1 or 2) â†’ show Eltrive logo asset.
+  /// - All other companies (VHS, etc.) â†’ show VHS logo asset.
+  Widget _companyLogoWidget() {
+    // company_id "1" = Eltrive, "2" = VHS hospital
+    final localAsset = _companyId == '2' ? 'assets/vhs_logo.png' : 'assets/eltrive_plan.png';
+
+    if (_companyLogoUrl.isNotEmpty) {
+      return Image.network(
+        _companyLogoUrl,
+        height: 80,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) =>
+            Image.asset(localAsset, height: 80, fit: BoxFit.contain),
+      );
+    }
+    return Image.asset(localAsset, height: 80, fit: BoxFit.contain);
   }
 
   Future<void> _initNotifications() async {
@@ -276,7 +304,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final isCheckedIn = prefs.getBool(_prefKeyCheckedIn) ?? false;
     if (!isCheckedIn) {
       await Workmanager().cancelByUniqueName(finalLocationTask);
-      print('Canceled stray Workmanager tasks on app start');
+      debugPrint('Canceled stray Workmanager tasks on app start');
     }
   }
 
@@ -313,8 +341,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   }
 
   Future<bool> _checkInternetConnectivity() async {
-    var connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult == ConnectivityResult.none) {
+    final connectivityResults = await Connectivity().checkConnectivity();
+    if (connectivityResults.isEmpty || connectivityResults.contains(ConnectivityResult.none)) {
       return false;
     }
     try {
@@ -328,9 +356,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    print('AppLifecycleState changed: $state');
+    debugPrint('AppLifecycleState changed: $state');
     if (state == AppLifecycleState.resumed) {
-      print('App resumed. Auto-refreshing shifts and status...');
+      debugPrint('App resumed. Auto-refreshing shifts and status...');
       _loadShiftsAsync();
     } else if (state == AppLifecycleState.detached && isCheckedIn) {
       _scheduleFinalLocationUpdate();
@@ -347,11 +375,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
   Future<void> _scheduleFinalLocationUpdate() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-
       if (!isCheckedIn) {
         await Workmanager().cancelByUniqueName(finalLocationTask);
-        print('Canceled Workmanager task: User is not checked in');
+        debugPrint('Canceled Workmanager task: User is not checked in');
         return;
       }
 
@@ -367,7 +393,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         inputData: {
           'authToken': widget.authToken,
           'empId': widget.empId,
-          'shiftId': selectedShift ?? '', // ← FIX: Prevent null → wrong type error
+          'shiftId': selectedShift ?? '', // â† FIX: Prevent null â†’ wrong type error
           'deviceSerialNumber': widget.deviceSerialNumber,
         },
         constraints: Constraints(
@@ -377,9 +403,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         existingWorkPolicy: ExistingWorkPolicy.replace,
       );
 
-      print('Successfully scheduled Workmanager periodic task (every ~15 min)');
+      debugPrint('Successfully scheduled Workmanager periodic task (every ~15 min)');
     } catch (e) {
-      print('Failed to schedule Workmanager task: $e');
+      debugPrint('Failed to schedule Workmanager task: $e');
       _handleError('Background location scheduling failed', e);
 
       // Mark for retry on next app open
@@ -392,7 +418,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final prefs = await SharedPreferences.getInstance();
 
     if (await Permission.ignoreBatteryOptimizations.isGranted) {
-      print('Battery optimization exemption already granted');
+      debugPrint('Battery optimization exemption already granted');
       return;
     }
 
@@ -425,23 +451,23 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             ),
           );
         }
-        print('Battery optimization exemption denied, prompted user');
+        debugPrint('Battery optimization exemption denied, prompted user');
         await Permission.ignoreBatteryOptimizations.request();
         await prefs.setString(prefKeyBatteryPrompt, now.toIso8601String());
       }
     } else {
-      print(
+      debugPrint(
         'Battery optimization prompt skipped (recently prompted at $lastPromptTimeStr)',
       );
     }
   }  void _autoSelectShift() {
     if (selectedShift != null && selectedShift!.isNotEmpty) {
-      print('Auto-select: Shift already selected ($selectedShift), preserving user manual selection.');
+      debugPrint('Auto-select: Shift already selected ($selectedShift), preserving user manual selection.');
       return;
     }
 
     if (empShifts.isEmpty) {
-      print('Auto-select: empShifts is empty, cannot auto-select.');
+      debugPrint('Auto-select: empShifts is empty, cannot auto-select.');
       return;
     }
 
@@ -503,7 +529,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     setState(() {
       selectedShift = matchedShift!['id'];
     });
-    print('Auto-detected and selected shift: ${matchedShift['name']} (ID: $selectedShift)');
+    debugPrint('Auto-detected and selected shift: ${matchedShift['name']} (ID: $selectedShift)');
   }
 
   Future<void> _loadShiftsAsync() async {
@@ -519,7 +545,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       }
       await _syncPendingLocations();
       setState(() => isShiftsLoading = false);
-    } catch (e, stackTrace) {
+    } catch (_) {
       setState(() => isShiftsLoading = false);
     }
   }
@@ -527,7 +553,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    clockTimer?.cancel();
+    clockTimer.cancel();
     workingTimer?.cancel();
     locationSendTimer?.cancel();
     positionStream?.cancel();
@@ -556,7 +582,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         }
       }
     } catch (e) {
-      print('Update check bypassed: $e'); // Fails silently to prevent locking users out if endpoint isn't ready
+      debugPrint('Update check bypassed: $e'); // Fails silently to prevent locking users out if endpoint isn't ready
     }
   }
 
@@ -629,11 +655,11 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final prefs = await SharedPreferences.getInstance();
     final storedEmpId = prefs.getString(_prefKeyEmpId);
 
-    print('DEBUG ADMIN CHECK START:');
-    print('  - widget.empId: "${widget.empId}"');
-    print('  - storedEmpId in prefs: "$storedEmpId"');
-    print('  - userRole in prefs: "${prefs.getString('userRole')}"');
-    print('  - savedIsAdmin in prefs: "${prefs.getBool('isAdminUser')}"');
+    debugPrint('DEBUG ADMIN CHECK START:');
+    debugPrint('  - widget.empId: "${widget.empId}"');
+    debugPrint('  - storedEmpId in prefs: "$storedEmpId"');
+    debugPrint('  - userRole in prefs: "${prefs.getString('userRole')}"');
+    debugPrint('  - savedIsAdmin in prefs: "${prefs.getBool('isAdminUser')}"');
 
     if (widget.empId.isEmpty) {
       _handleError('Invalid employee ID', Exception('widget.empId is empty'));
@@ -658,7 +684,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       if (savedRole.isNotEmpty) await prefs.setString('userRole', savedRole);
       if (savedFcm.isNotEmpty)  await prefs.setString('fcm_token', savedFcm);
       if (savedIsAdmin) await prefs.setBool('isAdminUser', true);
-      print('Cleared SharedPreferences for new empId: ${widget.empId}');
+      debugPrint('Cleared SharedPreferences for new empId: ${widget.empId}');
       isCheckedIn = false;
       isAllowedToCheckIn = true;
       isAllowedToCheckOut = false;
@@ -671,7 +697,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     } else {
       if (lastOpenedDate != todayStr) {
         // It's a new day! Reset yesterday's stored times
-        print('New day detected ($todayStr != $lastOpenedDate). Resetting daily check-in/out state.');
+        debugPrint('New day detected ($todayStr != $lastOpenedDate). Resetting daily check-in/out state.');
         await prefs.setString('last_opened_date', todayStr);
         await prefs.setBool(_prefKeyCheckedIn, false);
         await prefs.setString(_prefKeyWorkingDuration, '00:00:00');
@@ -713,16 +739,16 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     setState(() {
       isAdminUser = widget.isAdmin || userRole == 'admin' || widget.empId == '0' || widget.empId == 'admin' || savedIsAdmin;
     });
-    print('DEBUG ADMIN CHECK END:');
-    print('  - calculated isAdminUser: $isAdminUser');
-    print('  - userRole: "$userRole"');
-    print('  - savedIsAdmin: $savedIsAdmin');
+    debugPrint('DEBUG ADMIN CHECK END:');
+    debugPrint('  - calculated isAdminUser: $isAdminUser');
+    debugPrint('  - userRole: "$userRole"');
+    debugPrint('  - savedIsAdmin: $savedIsAdmin');
     if (isAdminUser) {
       await prefs.setString('userRole', 'admin');
       await prefs.setBool('isAdminUser', true);
     }
 
-    print(
+    debugPrint(
       'Initial state - isCheckedIn: $isCheckedIn, isAllowedToCheckIn: $isAllowedToCheckIn, isAllowedToCheckOut: $isAllowedToCheckOut, selectedShift: $selectedShift',
     );
 
@@ -746,13 +772,13 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       };
       if (_isConnected) {
         await _sendLocationUpdateWithRetry(payload, prefs);
-        print('Sent final location update on app termination');
+        debugPrint('Sent final location update on app termination');
       } else {
         await _storePendingLocation(payload, prefs);
-        print('Stored final location for later sync');
+        debugPrint('Stored final location for later sync');
       }
     } catch (e) {
-      print('Failed to send final location update: $e');
+      debugPrint('Failed to send final location update: $e');
       _handleError('Could not send final location update', e);
       final prefs = await SharedPreferences.getInstance();
       await _storePendingLocation({
@@ -782,7 +808,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       sessionStart?.toIso8601String() ?? '',
     );
     await prefs.setString(_prefKeySelectedShift, selectedShift ?? '');
-    print(
+    debugPrint(
       'Saved state - isCheckedIn: $isCheckedIn, workingDuration: ${_formatDuration(workingDuration)}, selectedShift: $selectedShift',
     );
   }
@@ -798,12 +824,12 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         final payload = jsonDecode(locationJson);
         await _sendLocationUpdateWithRetry(payload, prefs);
       } catch (e) {
-        print('Failed to sync pending location: $e');
+        debugPrint('Failed to sync pending location: $e');
         continue;
       }
     }
     await prefs.setStringList(_prefKeyPendingLocations, []);
-    print('Cleared pending locations after sync');
+    debugPrint('Cleared pending locations after sync');
   }
 
   Future<Map<String, dynamic>> _sendLocationUpdateWithRetry(
@@ -814,7 +840,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       try {
         final response = await ApiService.sendLocationUpdate(payload);
         final data = jsonDecode(response.body);
-        print('Location Update Response: $data');
+        debugPrint('Location Update Response: $data');
 
         if (data['status'] == 'ok' && data['auto_checkout'] == true) {
           setState(() {
@@ -848,10 +874,10 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         }
         return data; // Return data for background handling
       } catch (e) {
-        print('Attempt $attempt failed: $e');
+        debugPrint('Attempt $attempt failed: $e');
         if (attempt == 3) {
           await _storePendingLocation(payload, prefs);
-          print('Max retries reached, stored location for later sync');
+          debugPrint('Max retries reached, stored location for later sync');
         }
         await Future.delayed(Duration(milliseconds: 1000 * attempt));
       }
@@ -885,7 +911,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     if (!await Permission.locationAlways.isGranted) {
       final status = await Permission.locationAlways.request();
       if (!status.isGranted) {
-        print('Background location permission denied - continuing in foreground mode silently');
+        debugPrint('Background location permission denied - continuing in foreground mode silently');
       }
     }
 
@@ -893,11 +919,11 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
-        isForegroundMode: true,                    // ← important
+        isForegroundMode: true,                    // â† important
         autoStart: true,
         autoStartOnBoot: true,
         notificationChannelId: 'attendance_foreground', // new channel
-        // ───────────── Persistent notification ─────────────
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Persistent notification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         initialNotificationTitle: 'Attendance Active',
         initialNotificationContent: 'Location is being tracked for check-in / check-out',
         // Show this notification permanently while checked-in
@@ -1013,21 +1039,21 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   void onStart(ServiceInstance service) async {
     DartPluginRegistrant.ensureInitialized();
 
-    print('Background service started');
+    debugPrint('Background service started');
 
     if (service is AndroidServiceInstance) {
       service.on('setAsForeground').listen((event) {
-        print('Setting as foreground service');
+        debugPrint('Setting as foreground service');
         service.setAsForegroundService();
       });
 
-      // ← Change 'stopService' to 'stop' to match what we invoke
+      // â† Change 'stopService' to 'stop' to match what we invoke
       service.on('stop').listen((event) async {
-        print('Received stop command from main app - shutting down service');
+        debugPrint('Received stop command from main app - shutting down service');
         final prefs = await SharedPreferences.getInstance();
         final isCheckedIn = prefs.getBool(_prefKeyCheckedIn) ?? false;
         if (isCheckedIn) {
-          print('User is still checked-in → background tracking will rely on Workmanager');
+          debugPrint('User is still checked-in â†’ background tracking will rely on Workmanager');
         }
         service.stopSelf();  // This actually stops the service
       });
@@ -1050,7 +1076,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         deviceSerialNumber = event['deviceSerialNumber'] ?? deviceSerialNumber;
         selectedShift = event['selectedShift'] ?? selectedShift;
 
-        print('Background: State updated → isCheckedIn: $isCheckedIn');
+        debugPrint('Background: State updated â†’ isCheckedIn: $isCheckedIn');
 
         await prefs.setBool(_prefKeyCheckedIn, isCheckedIn);
         await prefs.setString(_prefKeySelectedShift, selectedShift ?? '');
@@ -1080,7 +1106,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     Timer.periodic(const Duration(seconds: 600), (timer) async {
       // Stop timer if user is no longer checked in
       if (!isCheckedIn) {
-        print('User not checked in → stopping location timer');
+        debugPrint('User not checked in â†’ stopping location timer');
         timer.cancel();
         return;
       }
@@ -1106,7 +1132,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
         // Handle auto-checkout from server
         if (data['auto_checkout'] == true) {
-          print('Auto-checkout triggered in background');
+          debugPrint('Auto-checkout triggered in background');
           await bgPlugin.show(
             0,
             'Auto Checkout',
@@ -1125,11 +1151,11 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           await prefs.setString(_prefKeySelectedShift, '');
         }
       } catch (e) {
-        print('Background location update failed silently: $e');
+        debugPrint('Background location update failed silently: $e');
       }
     });
 
-    print('Background service fully initialized and running');
+    debugPrint('Background service fully initialized and running');
   }
   @pragma('vm:entry-point')
   Future<bool> onIosBackground(ServiceInstance service) async {
@@ -1138,7 +1164,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final isCheckedIn = prefs.getBool(_prefKeyCheckedIn) ?? false;
     if (!isCheckedIn) {
       await Workmanager().cancelByUniqueName(finalLocationTask);
-      print(
+      debugPrint(
         'Canceled Workmanager task in iOS background as user is not checked in',
       );
       return true;
@@ -1182,7 +1208,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         ),
         existingWorkPolicy: ExistingWorkPolicy.replace,
       );
-      print('Scheduled Work manager periodic task for iOS background');
+      debugPrint('Scheduled Work manager periodic task for iOS background');
     } catch (e) {
       _handleError('iOS background location update failed', e);
       await _storePendingLocation({
@@ -1216,8 +1242,22 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     );
   }
 
+  bool _isAuthError(dynamic message) {
+    if (message == null) return false;
+    final msg = message.toString().toLowerCase();
+    return msg.contains('invalid token') ||
+        msg.contains('token invalid') ||
+        msg.contains('session expired') ||
+        msg.contains('expired token') ||
+        msg.contains('employee not found') ||
+        msg.contains('code mismatch');
+  }
+
   void _handleError(String message, dynamic error, [StackTrace? stackTrace]) {
-    print('$message: $error${stackTrace != null ? '\n$stackTrace' : ''}');
+    debugPrint('$message: $error${stackTrace != null ? '\n$stackTrace' : ''}');
+    if (_isAuthError(error) || _isAuthError(message)) {
+      return; // Skip showing UI error indicators for token expiry/mismatch
+    }
     if (mounted) {
       if (isAdminUser) {
         return; // Don't show error SnackBars or notifications for admins
@@ -1227,7 +1267,6 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           content: Text('$message: ${error.toString().split(':').last.trim()}'),
         ),
       );
-      _showNotification(title: 'Error', body: message); // Notify on error
     }
   }
 
@@ -1334,12 +1373,12 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         authToken: widget.authToken,
       );
       final data = jsonDecode(response.body);
-      print('Shifts API Response: $data');
+      debugPrint('Shifts API Response: $data');
       if (response.statusCode == 200 && data['status'] == 'success') {
         final List shiftsData = data['shifts'] ?? [];
         final now = tz.TZDateTime.now(ist);
         final today = DateTime(now.year, now.month, now.day);
-        print('Current Time (IST): $now, Today: $today');
+        debugPrint('Current Time (IST): $now, Today: $today');
         final List<Map<String, dynamic>> newShifts = [];
         for (var shift in shiftsData) {
           final shiftTimeRaw = shift['shift_time']?.toString() ?? '-';
@@ -1408,7 +1447,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                   '$start12:${startMin.toString().padLeft(2, '0')} $startPeriod - '
                   '$end12:${endMin.toString().padLeft(2, '0')} $endPeriod${overnight ? ' (Next Day)' : ''}';
             } else {
-              print(
+              debugPrint(
                 'Invalid shift time format for ${shift['shift_name']}: $shiftTime (raw: $shiftTimeRaw)',
               );
             }
@@ -1483,19 +1522,14 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         if (!isCheckedIn) {
           _autoSelectShift();
         }
-      } else if (data['message']?.toLowerCase().contains('invalid token') ??
-          false) {
-        await _showInvalidTokenDialog();
       } else {
+        // Any non-success response (auth, server error, etc.) â€” load defaults silently
         _populateDefaultShifts();
-        _handleError(
-          'Failed to fetch shifts',
-          Exception(data['message'] ?? 'Unknown error'),
-        );
+        debugPrint('fetchShifts failed silently: ${data['message']}');
       }
     } catch (e) {
       _populateDefaultShifts();
-      _handleError('Error fetching shifts', e);
+      debugPrint('fetchShifts exception: $e');
     } finally {
       setState(() => isShiftsLoading = false);
     }
@@ -1524,7 +1558,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         authToken: widget.authToken,
       );
       final data = jsonDecode(response.body);
-      print('Status API Response: $data');
+      debugPrint('Status API Response: $data');
       if (response.statusCode == 200 && data['status'] == 'success') {
         String displayTime = 'General Shift';
         DateTime? startTime;
@@ -1636,20 +1670,15 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           'deviceSerialNumber': widget.deviceSerialNumber,
           'selectedShift': selectedShift,
         });
-        print(
+        debugPrint(
           'Updated state - isCheckedIn: $isCheckedIn, isAllowedToCheckIn: $isAllowedToCheckIn, isAllowedToCheckOut: $isAllowedToCheckOut, selectedShift: $selectedShift, empShifts: ${empShifts.length}',
         );
       } else {
-        _handleError(
-          'Failed to fetch status',
-          Exception(data['message'] ?? 'Unknown error'),
-        );
-        if (data['message']?.toLowerCase().contains('invalid token') ?? false) {
-          await _showInvalidTokenDialog();
-        }
+        // Any non-success response â€” fail silently, user stays logged in
+        debugPrint('fetchStatus failed silently: ${data['message']}');
       }
     } catch (e) {
-      _handleError('Error fetching status', e);
+      debugPrint('fetchStatus exception: $e');
     } finally {
       setState(() => isStatusLoading = false);
     }
@@ -1725,6 +1754,13 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       final now = DateTime.now().toUtc().toIso8601String();
       final position = await _getCurrentLocation();
 
+      // â”€â”€ Late check-in detection (hospital/VHS accounts only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      if (_isHospitalAccount) {
+        await _checkAndHandleLateCheckIn();
+        if (!mounted) return;
+      }
+      // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
       final response = await ApiService.checkIn(
         authToken: widget.authToken,
         empId: widget.empId,
@@ -1736,7 +1772,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       );
 
       final data = jsonDecode(response.body);
-      print('CheckIn Response: $data');
+      debugPrint('CheckIn Response: $data');
 
       if (response.statusCode == 200 && data['status'] == 'success') {
         // Update UI & state
@@ -1788,7 +1824,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 title: const Text("Important for Accurate Attendance"),
                 content: const Text(
                   "To make sure your attendance is recorded even when the app is closed:\n\n"
-                      "→ Go to Settings → Apps → This App → Battery → Choose 'Unrestricted' or 'No restrictions'\n\n"
+                      "â†’ Go to Settings â†’ Apps â†’ This App â†’ Battery â†’ Choose 'Unrestricted' or 'No restrictions'\n\n"
                       "Without this, Android may stop tracking when app is closed.",
                 ),
                 actions: [
@@ -1808,6 +1844,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             );
           }
         }
+      } else if (_isAuthError(data['message'])) {
+        await _showInvalidTokenDialog();
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1917,7 +1955,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       );
 
       final data = jsonDecode(response.body);
-      print('CheckOut Response: $data');
+      debugPrint('CheckOut Response: $data');
 
       if (response.statusCode == 200 && data['status'] == 'success') {
         await fetchStatus();
@@ -1935,14 +1973,14 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
         // Stop Workmanager
         await Workmanager().cancelByUniqueName(finalLocationTask);
-        print('Workmanager task cancelled on check-out');
+        debugPrint('Workmanager task cancelled on check-out');
 
-        // ──────────────────────────────────────────────────────────────
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // STOP FOREGROUND SERVICE CORRECTLY (no await needed)
-        // ──────────────────────────────────────────────────────────────
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         final service = FlutterBackgroundService();
-        service.invoke('stop');  // ← No await here
-        print('Foreground service stop requested');
+        service.invoke('stop');  // â† No await here
+        debugPrint('Foreground service stop requested');
 
         // Update background state
         FlutterBackgroundService().invoke('updateState', {
@@ -1968,9 +2006,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
         // Do not clear SharedPreferences or navigate to Login Screen on successful checkout,
         // so that the user remains logged in.
-      } else if (data['message']?.toLowerCase().contains('invalid token') ?? false) {
+      } else if (_isAuthError(data['message'])) {
         await _showInvalidTokenDialog();
-        await _showNotification(title: 'Session Expired', body: 'Please log in again.');
       } else {
         await fetchStatus();
         if (mounted) {
@@ -2060,7 +2097,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   }
 
   Future<void> _showInvalidTokenDialog() async {
-    if (!mounted) return;
+    if (!mounted || _isSessionDialogShowing) return;
+    _isSessionDialogShowing = true;
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -2078,12 +2116,24 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
               TextButton(
                 onPressed: () async {
                   final prefs = await SharedPreferences.getInstance();
+                  // Preserve login credentials so silent re-login works next time
+                  final savedUserId = prefs.getString('savedUserId') ?? '';
+                  final savedPassword = prefs.getString('savedPassword') ?? '';
+                  final savedDeviceSerial = prefs.getString('deviceSerialNumber') ?? '';
+                  final savedFcm = prefs.getString('fcm_token') ?? '';
                   await prefs.clear();
-                  debugPrint('Cleared SharedPreferences for session reset');
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  );
+                  if (savedUserId.isNotEmpty) await prefs.setString('savedUserId', savedUserId);
+                  if (savedPassword.isNotEmpty) await prefs.setString('savedPassword', savedPassword);
+                  if (savedDeviceSerial.isNotEmpty) await prefs.setString('deviceSerialNumber', savedDeviceSerial);
+                  if (savedFcm.isNotEmpty) await prefs.setString('fcm_token', savedFcm);
+                  debugPrint('Session reset â€” credentials preserved for silent login');
+                  _isSessionDialogShowing = false;
+                  if (context.mounted) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    );
+                  }
                 },
                 child: const Text(
                   'OK',
@@ -2223,6 +2273,145 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     return 'Good Evening';
   }
 
+  /// Shows a late check-in reason dialog if the employee is checking in more
+  /// than 15 minutes after their selected shift's start time, then silently
+  /// submits an OT/Late request so the manager can approve/reject it.
+  Future<void> _checkAndHandleLateCheckIn() async {
+    if (selectedShift == null) return;
+
+    final shiftData = empShifts.firstWhere(
+      (s) => s['id'] == selectedShift,
+      orElse: () => <String, dynamic>{},
+    );
+    final DateTime? shiftStart = shiftData['startTime'] as DateTime?;
+    if (shiftStart == null) return;
+
+    final now = DateTime.now();
+    final lateBy = now.difference(shiftStart);
+    if (lateBy.inMinutes <= 15) return; // on time â€“ nothing to do
+
+    if (!mounted) return;
+    final reasonController = TextEditingController();
+
+    final submitted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            Icon(Icons.schedule_rounded, color: Colors.orange.shade700),
+            const SizedBox(width: 8),
+            const Text('Late Check-In', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You are checking in ${lateBy.inMinutes} minute(s) late. '
+              'Please provide a reason for manager approval.',
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Reason for late check-in...',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Skip'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade700,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Submit', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (submitted == true && reasonController.text.trim().isNotEmpty) {
+      try {
+        await ApiService.submitOtRequest(
+          empId: widget.empId,
+          authToken: widget.authToken,
+          requestType: 'late_checkin',
+          date: DateFormat('yyyy-MM-dd').format(now),
+          reason: reasonController.text.trim(),
+          duration: '${lateBy.inHours.toString().padLeft(2, '0')}:${(lateBy.inMinutes % 60).toString().padLeft(2, '0')}',
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Late check-in request submitted for manager approval.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (_) {}
+    }
+    reasonController.dispose();
+  }
+
+  Widget _quickCard({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                  height: 1.3,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded, size: 13, color: color.withValues(alpha: 0.6)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     SystemChrome.setSystemUIOverlayStyle(
@@ -2297,7 +2486,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   Widget _getBodyWidget(int index, String today) {
     Widget mainContent() {
       if (index == 0) {
-        print(
+        debugPrint(
           'Button State: isAllowedToCheckIn=$isAllowedToCheckIn, isAllowedToCheckOut=$isAllowedToCheckOut, selectedShift=$selectedShift, isProcessing=$isProcessing, activeShift=${empShifts.any((shift) => shift['id'] == selectedShift && shift['isActive'] as bool)}',
         );
         return RefreshIndicator(
@@ -2336,6 +2525,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                 MaterialPageRoute(
                                   builder: (_) => AdminPage(
                                     empName: widget.empName,
+                                    companyId: widget.companyId,
                                   ),
                                 ),
                               );
@@ -2343,17 +2533,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                           ),
                         ),
                       ),
-                    Center(
-                      child: _companyLogoUrl.isNotEmpty
-                          ? Image.network(
-                              _companyLogoUrl,
-                              height: 80,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) =>
-                                  Image.asset('assets/eltrive_plan.png', height: 80),
-                            )
-                          : Image.asset('assets/eltrive_plan.png', height: 80),
-                    ),
+                    Center(child: _companyLogoWidget()),
                     Positioned(
                       right: 0,
                       top: 0,
@@ -2431,7 +2611,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
               child: isShiftsLoading || isStatusLoading
                   ? const Center(child: CircularProgressIndicator())
                   : DropdownButtonFormField<String>(
-                      value: selectedShift,
+                      initialValue: selectedShift,
                       isExpanded: true,
                       hint: const Text(
                         'Please Select Shift',
@@ -2454,7 +2634,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                         ),
                         prefixIcon: Icon(Icons.badge_rounded, color: Colors.teal.shade700, size: 22),
                         filled: true,
-                        fillColor: Colors.teal.shade50.withOpacity(0.3),
+                        fillColor: Colors.teal.shade50.withValues(alpha: 0.3),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -2668,12 +2848,61 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             ),
             const SizedBox(height: 32),
             Padding(
-              padding: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.only(bottom: 4),
               child: Text(
                 'Shifts Working Time: $totalWorkingHours',
                 style: const TextStyle(color: Color(0xFF121111), fontSize: 16),
               ),
             ),
+            const SizedBox(height: 20),
+            // â”€â”€ Quick-access cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // Attendance History: all companies
+            // OT / Late Request:  hospital / VHS accounts only
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _quickCard(
+                      icon: Icons.history_rounded,
+                      label: 'Attendance\nHistory',
+                      color: Colors.teal,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AttendanceHistoryScreen(
+                            empId: widget.empId,
+                            authToken: widget.authToken,
+                            empName: widget.empName,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_isHospitalAccount) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _quickCard(
+                        icon: Icons.more_time_rounded,
+                        label: 'OT / Late\nRequest',
+                        color: Colors.deepOrange,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => OtLateRequestScreen(
+                              empId: widget.empId,
+                              authToken: widget.authToken,
+                              empName: widget.empName,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -2735,3 +2964,4 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     );
   }
 }
+
