@@ -1464,63 +1464,20 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           });
         }
 
-        // Always ensure all four standard shifts are present in the list
-        final nowForDefaults = DateTime.now();
-        final defaultsDateStr = '${nowForDefaults.year}-${nowForDefaults.month.toString().padLeft(2, '0')}-${nowForDefaults.day.toString().padLeft(2, '0')}';
-        
-        bool hasGeneral = newShifts.any((s) => s['name'].toString().toLowerCase().contains('general'));
-        bool hasA = newShifts.any((s) => s['name'].toString().toLowerCase().contains('a shift') || s['name'].toString().toLowerCase().contains('shift a'));
-        bool hasB = newShifts.any((s) => s['name'].toString().toLowerCase().contains('b shift') || s['name'].toString().toLowerCase().contains('shift b'));
-        bool hasC = newShifts.any((s) => s['name'].toString().toLowerCase().contains('c shift') || s['name'].toString().toLowerCase().contains('shift c'));
-
-        if (!hasGeneral) {
-          newShifts.add({
-            'id': '1',
-            'name': 'General Shift : 09:00 AM - 05:00 PM',
-            'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 9, 0),
-            'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 17, 0),
-            'isActive': true,
-            'date': defaultsDateStr,
-          });
-        }
-        if (!hasA) {
-          newShifts.add({
-            'id': '2',
-            'name': 'A Shift : 06:00 AM - 02:00 PM',
-            'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 6, 0),
-            'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 14, 0),
-            'isActive': true,
-            'date': defaultsDateStr,
-          });
-        }
-        if (!hasB) {
-          newShifts.add({
-            'id': '3',
-            'name': 'B Shift : 02:00 PM - 10:00 PM',
-            'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 14, 0),
-            'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 22, 0),
-            'isActive': true,
-            'date': defaultsDateStr,
-          });
-        }
-        if (!hasC) {
-          newShifts.add({
-            'id': '4',
-            'name': 'C Shift : 10:00 PM - 06:00 AM',
-            'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 22, 0),
-            'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 6, 0).add(const Duration(days: 1)),
-            'isActive': true,
-            'date': defaultsDateStr,
-          });
-        }
-
         setState(() {
           empShifts = newShifts;
-          isShiftSelectable = true;
+          // Selectable only when there are multiple shifts
+          isShiftSelectable = newShifts.length > 1;
         });
 
         if (!isCheckedIn) {
-          _autoSelectShift();
+          if (newShifts.length == 1) {
+            // Only one shift assigned — auto-select immediately, no user action needed
+            setState(() => selectedShift = newShifts[0]['id']);
+            debugPrint('Single shift auto-selected: ${newShifts[0]['name']}');
+          } else {
+            _autoSelectShift();
+          }
         }
       } else {
         // Any non-success response (auth, server error, etc.) â€” load defaults silently
@@ -2610,15 +2567,75 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               child: isShiftsLoading || isStatusLoading
                   ? const Center(child: CircularProgressIndicator())
+                  // ── Single shift → show as a locked info card ──────────────
+                  : empShifts.length == 1
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.shade50.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.teal.shade100, width: 1.2),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.badge_rounded, color: Colors.teal.shade700, size: 22),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Assigned Shift',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.teal.shade700,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  empShifts[0]['name']?.toString() ?? '',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.lock_outline_rounded, color: Colors.teal.shade300, size: 18),
+                        ],
+                      ),
+                    )
+                  // ── Multiple shifts → show dropdown ────────────────────────
+                  : empShifts.isEmpty
+                  ? Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'No shifts assigned. Contact your admin.',
+                              style: TextStyle(color: Colors.orange, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
                   : DropdownButtonFormField<String>(
                       initialValue: selectedShift,
                       isExpanded: true,
                       hint: const Text(
-                        'Please Select Shift',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        'Select Your Shift',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                       ),
                       dropdownColor: Colors.white,
                       decoration: InputDecoration(
@@ -2626,7 +2643,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                           horizontal: 16,
                           vertical: 14,
                         ),
-                        labelText: 'Shift Name',
+                        labelText: 'Select Shift',
                         labelStyle: TextStyle(
                           color: Colors.teal.shade700,
                           fontWeight: FontWeight.bold,
@@ -2635,22 +2652,14 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                         prefixIcon: Icon(Icons.badge_rounded, color: Colors.teal.shade700, size: 22),
                         filled: true,
                         fillColor: Colors.teal.shade50.withValues(alpha: 0.3),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                            color: Colors.teal.shade100,
-                            width: 1.2,
-                          ),
+                          borderSide: BorderSide(color: Colors.teal.shade100, width: 1.2),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                            color: Colors.teal.shade700,
-                            width: 1.5,
-                          ),
+                          borderSide: BorderSide(color: Colors.teal.shade700, width: 1.5),
                         ),
                       ),
                       icon: Icon(Icons.arrow_drop_down_rounded, color: Colors.teal.shade700, size: 28),
@@ -2658,7 +2667,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                         return DropdownMenuItem<String>(
                           value: shift['id'],
                           child: Text(
-                            '${shift['name']} (${shift['date']})',
+                            shift['name']?.toString() ?? '',
                             style: const TextStyle(
                               color: Colors.black,
                               fontSize: 14,

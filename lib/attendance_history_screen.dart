@@ -290,13 +290,13 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                       // ── Summary Cards ───────────────────────────────────────
                       Row(
                         children: [
-                          _summaryTile('Present', summary['present'] ?? 0, Colors.green, Icons.check_circle_rounded),
+                          _summaryTile('Present', summary['present'] ?? 0, const Color(0xFF2E7D32)),
                           const SizedBox(width: 8),
-                          _summaryTile('Late', summary['late'] ?? 0, Colors.orange, Icons.schedule_rounded),
+                          _summaryTile('Late', summary['late'] ?? 0, const Color(0xFFE65100)),
                           const SizedBox(width: 8),
-                          _summaryTile('Absent', summary['absent'] ?? 0, Colors.red, Icons.cancel_rounded),
+                          _summaryTile('Absent', summary['absent'] ?? 0, const Color(0xFFC62828)),
                           const SizedBox(width: 8),
-                          _summaryTile('Leave', summary['leave'] ?? 0, Colors.blue, Icons.beach_access_rounded),
+                          _summaryTile('Leave', summary['leave'] ?? 0, const Color(0xFF1565C0)),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -324,22 +324,54 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     );
   }
 
-  Widget _summaryTile(String label, int count, Color color, IconData icon) {
+  Widget _summaryTile(String label, int count, Color color) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.25)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 4),
-            Text('$count', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-            Text(label, style: TextStyle(fontSize: 10, color: color)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            children: [
+              // Coloured accent bar at top
+              Container(height: 4, color: color),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Column(
+                  children: [
+                    Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                        letterSpacing: 0.2,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

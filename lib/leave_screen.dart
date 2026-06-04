@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'check_in_out_screen.dart';
 import 'services/api_service.dart';
 
@@ -200,12 +201,27 @@ class _LeaveScreenState extends State<LeaveScreen>
       final result = jsonDecode(response.body);
       if (result['status'] == 'success') {
         _submittedLeaves.add(leaveKey);
+
+        // Save this leave to local phone storage so History tab shows it immediately
+        await _saveLeaveLocally({
+          'id': result['leave_id']?.toString() ??
+              'local_${DateTime.now().millisecondsSinceEpoch}',
+          'leave_type':      _leaveTypeName(selectedLeaveTypeId!),
+          'leave_type_name': _leaveTypeName(selectedLeaveTypeId!),
+          'from_date':   _fromDateController.text,
+          'to_date':     _toDateController.text,
+          'total_days':  _daysBetween(_fromDateController.text, _toDateController.text),
+          'reason':      _reasonController.text,
+          'status':      'pending',
+          'applied_on':  DateFormat('yyyy-MM-dd').format(DateTime.now()),
+        });
+
         _fromDateController.clear();
         _toDateController.clear();
         _reasonController.clear();
         setState(() { selectedLeaveTypeId = null; _quotaWarning = null; });
         _showDialog('Success', result['message'] ?? 'Leave applied successfully. Your manager will be notified.');
-        // Refresh history
+        // Refresh history and balance
         _fetchLeaveHistory();
         _fetchLeaveBalance();
       } else {
@@ -219,6 +235,54 @@ class _LeaveScreenState extends State<LeaveScreen>
   }
 
   // ── Balance & History ──────────────────────────────────────────────────────
+
+  String get _localCacheKey => 'leave_history_${widget.empId}';
+
+  /// Saves a newly applied leave into the phone's local storage.
+  Future<void> _saveLeaveLocally(Map<String, dynamic> leave) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_localCacheKey);
+      final List<Map<String, dynamic>> existing = raw != null
+          ? (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e)).toList()
+          : [];
+      // Prepend so newest is first
+      existing.insert(0, leave);
+      await prefs.setString(_localCacheKey, jsonEncode(existing));
+    } catch (_) {}
+  }
+
+  /// Loads all locally cached leaves from the phone.
+  Future<List<Map<String, dynamic>>> _loadLocalLeaveHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_localCacheKey);
+      if (raw != null && raw.isNotEmpty) {
+        return (jsonDecode(raw) as List)
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// Returns the display name for a leave type id.
+  String _leaveTypeName(String id) {
+    final found = leaveTypes.firstWhere(
+      (t) => t['id'] == id,
+      orElse: () => {'label': 'Leave'},
+    );
+    return found['label'] ?? 'Leave';
+  }
+
+  /// Calculates number of days between two date strings (inclusive).
+  int _daysBetween(String from, String to) {
+    try {
+      return DateTime.parse(to).difference(DateTime.parse(from)).inDays + 1;
+    } catch (_) {
+      return 1;
+    }
+  }
 
   Future<void> _fetchLeaveBalance() async {
     setState(() => _isLoadingBalance = true);
@@ -237,6 +301,14 @@ class _LeaveScreenState extends State<LeaveScreen>
 
   Future<void> _fetchLeaveHistory() async {
     setState(() => _isLoadingHistory = true);
+
+    // Step 1 — Show local cache instantly while API loads
+    final local = await _loadLocalLeaveHistory();
+    if (local.isNotEmpty && mounted) {
+      setState(() => _leaveHistory = local);
+    }
+
+    // Step 2 — Try the backend API
     try {
       final response = await ApiService.fetchLeaveHistory(
         empId: widget.empId,
@@ -245,11 +317,21 @@ class _LeaveScreenState extends State<LeaveScreen>
       final data = jsonDecode(response.body);
       if (data['status'] == 'success') {
         final List raw = data['leaves'] ?? data['history'] ?? [];
-        setState(() {
-          _leaveHistory = raw.map((e) => Map<String, dynamic>.from(e)).toList();
-        });
+        if (raw.isNotEmpty && mounted) {
+          final apiLeaves = raw
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          // API is authoritative — update display and overwrite local cache
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_localCacheKey, jsonEncode(apiLeaves));
+          setState(() => _leaveHistory = apiLeaves);
+        }
+        // If API returns empty but local has data — keep showing local data
       }
-    } catch (_) {}
+    } catch (_) {
+      // API not available — already showing local cache, nothing to do
+    }
+
     setState(() => _isLoadingHistory = false);
   }
 
