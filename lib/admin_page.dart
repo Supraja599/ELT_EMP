@@ -434,10 +434,10 @@ class _AdminPageState extends State<AdminPage>
       debugPrint("Refresh error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Failed to refresh requests."),
+          SnackBar(
+            content: const Text("Failed to refresh requests."),
             backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -629,7 +629,7 @@ class _AdminPageState extends State<AdminPage>
               final companyId = prefs.getString('companyId') ?? '';
               final empId = prefs.getString('empId') ?? '0';
               final token = prefs.getString('authToken') ?? '';
-              if (!mounted) return;
+              if (!context.mounted) return;
               nav.pushReplacement(
                 MaterialPageRoute(
                   builder: (_) => CheckInOutScreen(
@@ -654,7 +654,7 @@ class _AdminPageState extends State<AdminPage>
               final nav = Navigator.of(context);
               final prefs = await SharedPreferences.getInstance();
               await prefs.clear();
-              if (!mounted) return;
+              if (!context.mounted) return;
               nav.pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
                 (route) => false,

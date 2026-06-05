@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -21,7 +21,7 @@ import 'attendance_history_screen.dart';
 import 'leave_screen.dart';
 import 'login_screen.dart';
 import 'ot_late_request_screen.dart';
-import 'Requests.dart';
+import 'requests.dart';
 import 'expenses_screen.dart';
 import 'more_screen.dart';
 import 'emp_profile.dart';
@@ -66,7 +66,7 @@ void callbackDispatcher() {
           'shift_id': inputData?['shiftId'] ?? '',
           'latitude': position.latitude.toString(),
           'longitude': position.longitude.toString(),
-          'timestamp': DateTime.now().toUtc().toIso8601String(),
+          'timestamp': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
           'device_serial_number': inputData?['deviceSerialNumber'] ?? '',
         };
 
@@ -88,12 +88,15 @@ void callbackDispatcher() {
 
             _backgroundLocationSendCount++; // optional counter
 
-            String notificationBody = 'Location updated successfully in background';
+            final action = data['action']?.toString() ?? '';
+            String notificationBody;
             if (data['auto_checkout'] == true) {
               notificationBody =
               'Auto-checkout triggered!\nTotal hours: ${data['cumulative_working_hours'] ?? 'N/A'}';
               await prefs.setBool('is_checked_in', false);
               await Workmanager().cancelByUniqueName(finalLocationTask);
+            } else if (action == 'wait_for_approval') {
+              notificationBody = 'Location recorded — pending shift approval';
             } else {
               notificationBody =
               'Background location sent (${_backgroundLocationSendCount}x today)';
@@ -150,6 +153,231 @@ Future<void> _storePendingLocation(
   await prefs.setStringList('pending_locations', pendingLocations);
   debugPrint('Workmanager stored pending location: $payload');
 }
+
+@pragma('vm:entry-point')
+void onStart(ServiceInstance service) async {
+  DartPluginRegistrant.ensureInitialized();
+
+  debugPrint('Background service started');
+
+  if (service is AndroidServiceInstance) {
+    service.on('setAsForeground').listen((event) {
+      debugPrint('Setting as foreground service');
+      service.setAsForegroundService();
+    });
+
+    service.on('stop').listen((event) async {
+      debugPrint('Received stop command from main app - shutting down service');
+      final prefs = await SharedPreferences.getInstance();
+      final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
+      if (isCheckedIn) {
+        debugPrint('User is still checked-in → background tracking will rely on Workmanager');
+      }
+      service.stopSelf();
+    });
+  }
+
+  // Load initial state from SharedPreferences
+  final prefs = await SharedPreferences.getInstance();
+  bool isCheckedIn = prefs.getBool('is_checked_in') ?? false;
+  String? empId = prefs.getString('empId');
+  String? authToken = prefs.getString('authToken');
+  String? deviceSerialNumber = prefs.getString('deviceSerialNumber');
+  String? selectedShift = prefs.getString('selected_shift');
+
+  // Initialize notifications in background isolate
+  final bgPlugin = FlutterLocalNotificationsPlugin();
+  const AndroidInitializationSettings androidInit =
+  AndroidInitializationSettings('@mipmap/ic_launcher');
+  await bgPlugin.initialize(
+    const InitializationSettings(android: androidInit),
+  );
+
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'attendance_channel_id',
+    'Attendance Notifications',
+    description: 'Notifications for attendance events',
+    importance: Importance.max,
+    playSound: true,
+  );
+  await bgPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
+
+  Timer? bgLocationTimer;
+
+  void startBgLocationTimer() {
+    bgLocationTimer?.cancel();
+
+    bgLocationTimer = Timer.periodic(const Duration(seconds: 600), (timer) async {
+      if (!isCheckedIn) {
+        debugPrint('Background: User not checked in → stopping location timer');
+        timer.cancel();
+        bgLocationTimer = null;
+        return;
+      }
+
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+
+        final payload = {
+          'auth_token': authToken ?? '',
+          'emp_id': empId ?? '',
+          'shift_id': selectedShift ?? '',
+          'latitude': position.latitude.toString(),
+          'longitude': position.longitude.toString(),
+          'timestamp': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+          'device_serial_number': deviceSerialNumber ?? '',
+        };
+
+        final response = await ApiService.sendLocationUpdate(payload);
+        final data = jsonDecode(response.body);
+
+        if (data['auto_checkout'] == true) {
+          debugPrint('Auto-checkout triggered in background');
+          await bgPlugin.show(
+            0,
+            'Auto Checkout',
+            'Triggered in background. Total: ${data['cumulative_working_hours'] ?? 'N/A'}',
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                'attendance_channel_id',
+                'Attendance Notifications',
+                importance: Importance.max,
+              ),
+            ),
+          );
+
+          isCheckedIn = false;
+          await prefs.setBool('is_checked_in', false);
+          await prefs.setString('selected_shift', '');
+          timer.cancel();
+          bgLocationTimer = null;
+        }
+      } catch (e) {
+        debugPrint('Background location update failed silently: $e');
+      }
+    });
+  }
+
+  // Start timer on initial startup if checked in
+  if (isCheckedIn) {
+    startBgLocationTimer();
+  }
+
+  // Listen for state updates from main app
+  service.on('updateState').listen((event) async {
+    if (event != null) {
+      final wasCheckedIn = isCheckedIn;
+      isCheckedIn = event['isCheckedIn'] ?? isCheckedIn;
+      empId = event['empId'] ?? empId;
+      authToken = event['authToken'] ?? authToken;
+      deviceSerialNumber = event['deviceSerialNumber'] ?? deviceSerialNumber;
+      selectedShift = event['selectedShift'] ?? selectedShift;
+
+      debugPrint('Background: State updated → isCheckedIn: $isCheckedIn');
+
+      await prefs.setBool('is_checked_in', isCheckedIn);
+      await prefs.setString('selected_shift', selectedShift ?? '');
+
+      if (isCheckedIn && (!wasCheckedIn || bgLocationTimer == null)) {
+        startBgLocationTimer();
+      } else if (!isCheckedIn && bgLocationTimer != null) {
+        bgLocationTimer?.cancel();
+        bgLocationTimer = null;
+      }
+    }
+  });
+
+  debugPrint('Background service fully initialized and running');
+}
+
+@pragma('vm:entry-point')
+Future<bool> onIosBackground(ServiceInstance service) async {
+  DartPluginRegistrant.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
+  if (!isCheckedIn) {
+    await Workmanager().cancelByUniqueName(finalLocationTask);
+    debugPrint('Canceled Workmanager task in iOS background as user is not checked in');
+    return true;
+  }
+
+  try {
+    final position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+    final storedAuthToken = prefs.getString('authToken') ?? '';
+    final storedEmpId = prefs.getString('empId') ?? '';
+    final storedDeviceSerial = prefs.getString('deviceSerialNumber') ?? '';
+    final storedShiftId = prefs.getString('selected_shift') ?? '';
+
+    final payload = {
+      'auth_token': storedAuthToken,
+      'emp_id': storedEmpId,
+      'shift_id': storedShiftId,
+      'latitude': position.latitude.toString(),
+      'longitude': position.longitude.toString(),
+      'timestamp': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+      'device_serial_number': storedDeviceSerial,
+    };
+
+    final connectivityResults = await Connectivity().checkConnectivity();
+    final isConnected = connectivityResults.isNotEmpty && !connectivityResults.contains(ConnectivityResult.none);
+    if (isConnected) {
+      try {
+        final response = await ApiService.sendLocationUpdate(payload);
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'ok' && data['auto_checkout'] == true) {
+          await prefs.setBool('is_checked_in', false);
+          await prefs.setString('selected_shift', '');
+          await Workmanager().cancelByUniqueName(finalLocationTask);
+        }
+      } catch (e) {
+        await _storePendingLocation(payload, prefs);
+      }
+    } else {
+      await _storePendingLocation(payload, prefs);
+    }
+
+    await Workmanager().registerPeriodicTask(
+      finalLocationTask,
+      finalLocationTask,
+      frequency: const Duration(minutes: 15),
+      inputData: {
+        'authToken': storedAuthToken,
+        'empId': storedEmpId,
+        'shiftId': storedShiftId,
+        'deviceSerialNumber': storedDeviceSerial,
+      },
+      constraints: Constraints(
+        networkType: NetworkType.connected,
+        requiresBatteryNotLow: false,
+      ),
+      existingWorkPolicy: ExistingWorkPolicy.replace,
+    );
+    debugPrint('Scheduled Work manager periodic task for iOS background');
+  } catch (e) {
+    debugPrint('iOS background location update failed: $e');
+    final storedAuthToken = prefs.getString('authToken') ?? '';
+    final storedEmpId = prefs.getString('empId') ?? '';
+    final storedDeviceSerial = prefs.getString('deviceSerialNumber') ?? '';
+    final storedShiftId = prefs.getString('selected_shift') ?? '';
+    await _storePendingLocation({
+      'auth_token': storedAuthToken,
+      'emp_id': storedEmpId,
+      'shift_id': storedShiftId,
+      'latitude': '0.0',
+      'longitude': '0.0',
+      'timestamp': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+      'device_serial_number': storedDeviceSerial,
+    }, prefs);
+  }
+  return true;
+}
+
 
 class CheckInOutScreen extends StatefulWidget {
   final String empName;
@@ -764,7 +992,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         'shift_id': selectedShift,
         'latitude': position.latitude.toString(),
         'longitude': position.longitude.toString(),
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'timestamp': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
         'device_serial_number': widget.deviceSerialNumber,
       };
       if (_isConnected) {
@@ -784,7 +1012,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         'shift_id': selectedShift,
         'latitude': '0.0',
         'longitude': '0.0',
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'timestamp': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
         'device_serial_number': widget.deviceSerialNumber,
       }, prefs);
       await prefs.setBool('retry_final_location', true);
@@ -839,35 +1067,50 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         final data = jsonDecode(response.body);
         debugPrint('Location Update Response: $data');
 
-        if (data['status'] == 'ok' && data['auto_checkout'] == true) {
-          setState(() {
-            isCheckedIn = false;
-            isAllowedToCheckIn = true;
-            isAllowedToCheckOut = false;
-            isShiftSelectable = true;
-            selectedShift = null;
-            checkOutTime = DateFormat('hh:mm:ss a').format(DateTime.now());
-            workingDuration = _parseDuration(
-              data['cumulative_working_hours'] ?? '00:00:00',
-            );
-            totalWorkingHours = _formatDuration(workingDuration);
-          });
-          stopWorkingTimer();
-          _stopLocationSending();
-          await _saveState();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Auto-Checkout triggered by server'),
-              ),
+        if (data['status'] == 'ok') {
+          // ── Auto-checkout triggered by server ─────────────────────────
+          if (data['auto_checkout'] == true) {
+            setState(() {
+              isCheckedIn = false;
+              isAllowedToCheckIn = true;
+              isAllowedToCheckOut = false;
+              isShiftSelectable = true;
+              selectedShift = null;
+              checkOutTime = DateFormat('hh:mm:ss a').format(DateTime.now());
+              workingDuration = _parseDuration(
+                data['cumulative_working_hours'] ?? '00:00:00',
+              );
+              totalWorkingHours = _formatDuration(workingDuration);
+            });
+            stopWorkingTimer();
+            _stopLocationSending();
+            await _saveState();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Auto-Checkout triggered by server')),
+              );
+            }
+            await _showNotification(
+              title: 'Auto Checkout',
+              body: 'Server triggered auto-checkout. Total: ${data['cumulative_working_hours']}',
             );
           }
-          // Show notification for auto-checkout even in UI thread
-          await _showNotification(
-            title: 'Auto Checkout',
-            body:
-                'Server triggered auto-checkout. Total: ${data['cumulative_working_hours']}',
-          );
+
+          // ── Pending approval action ────────────────────────────────────
+          // action = "wait_for_approval" means a checkout/OT request is
+          // pending approval; location is recorded successfully in the DB.
+          final action = data['action']?.toString() ?? '';
+          if (action == 'wait_for_approval') {
+            debugPrint('Location sent — pending approval for this shift.');
+          }
+
+          // ── GPS fence distance ─────────────────────────────────────────
+          // distance_from_fence > 0 means the employee is outside the
+          // approved zone; the backend decides whether to allow check-in.
+          final fenceDistance = (data['distance_from_fence'] ?? 0).toDouble();
+          if (fenceDistance > 500) {
+            debugPrint('Employee is ${fenceDistance.toStringAsFixed(0)}m from approved location.');
+          }
         }
         return data; // Return data for background handling
       } catch (e) {
@@ -927,8 +1170,6 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         foregroundServiceNotificationId: 1001,
         foregroundServiceTypes: [
           AndroidForegroundType.location,
-          AndroidForegroundType.dataSync,
-          AndroidForegroundType.connectedDevice,   // extra protection
         ],
       ),
       iosConfiguration: IosConfiguration(
@@ -986,7 +1227,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       'shift_id': shiftId,
       'latitude': position.latitude.toString(),
       'longitude': position.longitude.toString(),
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'timestamp': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
       'device_serial_number': deviceSerialNumber,
     };
     if (_isConnected) {
@@ -997,7 +1238,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   }
 
   void _startLocationSending() {
-    _stopLocationSending();
+    if (locationSendTimer != null) {
+      return; // Already running, do not recreate or send immediately
+    }
     if (isCheckedIn) {
       locationSendTimer = Timer.periodic(const Duration(seconds: 600), (
         _,
@@ -1015,15 +1258,6 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           _handleError('Failed to send location update', e);
         }
       });
-      _getCurrentLocation().then((position) {
-        _sendLocationUpdate(
-          empId: widget.empId,
-          authToken: widget.authToken,
-          deviceSerialNumber: widget.deviceSerialNumber,
-          shiftId: selectedShift,
-          position: position,
-        );
-      });
     }
   }
 
@@ -1032,194 +1266,6 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     locationSendTimer = null;
   }
 
-  @pragma('vm:entry-point')
-  void onStart(ServiceInstance service) async {
-    DartPluginRegistrant.ensureInitialized();
-
-    debugPrint('Background service started');
-
-    if (service is AndroidServiceInstance) {
-      service.on('setAsForeground').listen((event) {
-        debugPrint('Setting as foreground service');
-        service.setAsForegroundService();
-      });
-
-      // â† Change 'stopService' to 'stop' to match what we invoke
-      service.on('stop').listen((event) async {
-        debugPrint('Received stop command from main app - shutting down service');
-        final prefs = await SharedPreferences.getInstance();
-        final isCheckedIn = prefs.getBool(_prefKeyCheckedIn) ?? false;
-        if (isCheckedIn) {
-          debugPrint('User is still checked-in â†’ background tracking will rely on Workmanager');
-        }
-        service.stopSelf();  // This actually stops the service
-      });
-    }
-
-    // Load initial state from SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    bool isCheckedIn = prefs.getBool(_prefKeyCheckedIn) ?? false;
-    String? empId = prefs.getString(_prefKeyEmpId);
-    String? authToken = prefs.getString('authToken');
-    String? deviceSerialNumber = prefs.getString('deviceSerialNumber');
-    String? selectedShift = prefs.getString(_prefKeySelectedShift);
-
-    // Listen for state updates from main app
-    service.on('updateState').listen((event) async {
-      if (event != null) {
-        isCheckedIn = event['isCheckedIn'] ?? isCheckedIn;
-        empId = event['empId'] ?? empId;
-        authToken = event['authToken'] ?? authToken;
-        deviceSerialNumber = event['deviceSerialNumber'] ?? deviceSerialNumber;
-        selectedShift = event['selectedShift'] ?? selectedShift;
-
-        debugPrint('Background: State updated â†’ isCheckedIn: $isCheckedIn');
-
-        await prefs.setBool(_prefKeyCheckedIn, isCheckedIn);
-        await prefs.setString(_prefKeySelectedShift, selectedShift ?? '');
-      }
-    });
-
-    // Initialize notifications in background isolate
-    final bgPlugin = FlutterLocalNotificationsPlugin();
-    const AndroidInitializationSettings androidInit =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
-    await bgPlugin.initialize(
-      const InitializationSettings(android: androidInit),
-    );
-
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      'attendance_channel_id',
-      'Attendance Notifications',
-      description: 'Notifications for attendance events',
-      importance: Importance.max,
-      playSound: true,
-    );
-    await bgPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
-
-    // Periodic location update timer (every 10 minutes)
-    Timer.periodic(const Duration(seconds: 600), (timer) async {
-      // Stop timer if user is no longer checked in
-      if (!isCheckedIn) {
-        debugPrint('User not checked in â†’ stopping location timer');
-        timer.cancel();
-        return;
-      }
-
-      try {
-        final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        );
-
-        final payload = {
-          'auth_token': authToken ?? '',
-          'emp_id': empId ?? '',
-          'shift_id': selectedShift ?? '',
-          'latitude': position.latitude.toString(),
-          'longitude': position.longitude.toString(),
-          'timestamp': DateTime.now().toUtc().toIso8601String(),
-          'device_serial_number': deviceSerialNumber ?? '',
-        };
-
-        final response = await ApiService.sendLocationUpdate(payload);
-
-        final data = jsonDecode(response.body);
-
-        // Handle auto-checkout from server
-        if (data['auto_checkout'] == true) {
-          debugPrint('Auto-checkout triggered in background');
-          await bgPlugin.show(
-            0,
-            'Auto Checkout',
-            'Triggered in background. Total: ${data['cumulative_working_hours'] ?? 'N/A'}',
-            const NotificationDetails(
-              android: AndroidNotificationDetails(
-                'attendance_channel_id',
-                'Attendance Notifications',
-                importance: Importance.max,
-              ),
-            ),
-          );
-
-          // Update local state
-          await prefs.setBool(_prefKeyCheckedIn, false);
-          await prefs.setString(_prefKeySelectedShift, '');
-        }
-      } catch (e) {
-        debugPrint('Background location update failed silently: $e');
-      }
-    });
-
-    debugPrint('Background service fully initialized and running');
-  }
-  @pragma('vm:entry-point')
-  Future<bool> onIosBackground(ServiceInstance service) async {
-    DartPluginRegistrant.ensureInitialized();
-    final prefs = await SharedPreferences.getInstance();
-    final isCheckedIn = prefs.getBool(_prefKeyCheckedIn) ?? false;
-    if (!isCheckedIn) {
-      await Workmanager().cancelByUniqueName(finalLocationTask);
-      debugPrint(
-        'Canceled Workmanager task in iOS background as user is not checked in',
-      );
-      return true;
-    }
-
-    try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      final storedAuthToken = prefs.getString('authToken') ?? '';
-      final storedEmpId = prefs.getString(_prefKeyEmpId) ?? '';
-      final storedDeviceSerial = prefs.getString('deviceSerialNumber') ?? '';
-
-      final payload = {
-        'auth_token': storedAuthToken,
-        'emp_id': storedEmpId,
-        'shift_id': prefs.getString(_prefKeySelectedShift),
-        'latitude': position.latitude.toString(),
-        'longitude': position.longitude.toString(),
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
-        'device_serial_number': storedDeviceSerial,
-      };
-      if (_isConnected) {
-        await _sendLocationUpdateWithRetry(payload, prefs);
-      } else {
-        await _storePendingLocation(payload, prefs);
-      }
-      await Workmanager().registerPeriodicTask(
-        finalLocationTask,
-        finalLocationTask,
-        frequency: const Duration(minutes: 1),
-        inputData: {
-          'authToken': storedAuthToken,
-          'empId': storedEmpId,
-          'shiftId': prefs.getString(_prefKeySelectedShift),
-          'deviceSerialNumber': storedDeviceSerial,
-        },
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-          requiresBatteryNotLow: false,
-        ),
-        existingWorkPolicy: ExistingWorkPolicy.replace,
-      );
-      debugPrint('Scheduled Work manager periodic task for iOS background');
-    } catch (e) {
-      _handleError('iOS background location update failed', e);
-      await _storePendingLocation({
-        'auth_token': widget.authToken,
-        'emp_id': widget.empId,
-        'shift_id': prefs.getString(_prefKeySelectedShift),
-        'latitude': '0.0',
-        'longitude': '0.0',
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
-        'device_serial_number': widget.deviceSerialNumber,
-      }, prefs);
-    }
-    return true;
-  }
 
   Future<Position> _getCurrentLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -1705,7 +1751,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         isProcessing = true;
       });
 
-      final now = DateTime.now().toUtc().toIso8601String();
+      final now = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
       final position = await _getCurrentLocation();
 
       // â”€â”€ Late check-in detection (hospital/VHS accounts only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1753,6 +1799,12 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           'deviceSerialNumber': widget.deviceSerialNumber,
           'selectedShift': selectedShift,
         });
+
+        // Show outside boundary warning if applicable
+        final fenceDistance = double.tryParse(data['distance_from_fence']?.toString() ?? '') ?? 0.0;
+        if (fenceDistance > 0) {
+          _showOutsideBoundaryDialog(true);
+        }
 
         // Show success feedback
         if (mounted) {
@@ -1895,7 +1947,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     });
 
     try {
-      final now = DateTime.now().toUtc().toIso8601String();
+      final now = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
       final position = await _getCurrentLocation();
 
       final response = await ApiService.checkOut(
@@ -1944,6 +1996,12 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           'deviceSerialNumber': widget.deviceSerialNumber,
           'selectedShift': selectedShift,
         });
+
+        // Show outside boundary warning if applicable
+        final fenceDistance = double.tryParse(data['distance_from_fence']?.toString() ?? '') ?? 0.0;
+        if (fenceDistance > 0) {
+          _showOutsideBoundaryDialog(false);
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -2042,6 +2100,33 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           },
         ) ??
         false;
+  }
+
+  void _showOutsideBoundaryDialog(bool isCheckIn) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 8),
+            Text("Outside Boundary", style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          "You are outside the approved location boundary. Your ${isCheckIn ? 'check-in' : 'check-out'} has been recorded successfully, but is flagged as outside the premises.",
+          style: const TextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("OK", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+          ),
+        ],
+      ),
+    );
   }
 
 
@@ -2970,4 +3055,5 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     );
   }
 }
+
 
