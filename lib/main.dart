@@ -167,14 +167,10 @@ class CustomClampedTextScaler implements TextScaler {
     );
   }
 
+  // ignore: deprecated_member_use_from_same_package, deprecated_member_use
   @override
-  double get textScaleFactor {
-    try {
-      return delegate.textScaleFactor.clamp(minScaleFactor, maxScaleFactor);
-    } catch (_) {
-      return 1.0;
-    }
-  }
+  double get textScaleFactor =>
+      delegate.scale(1.0).clamp(minScaleFactor, maxScaleFactor);
 }
 
 class MyApp extends StatelessWidget {

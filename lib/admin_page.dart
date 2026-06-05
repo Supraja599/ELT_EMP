@@ -437,7 +437,7 @@ class _AdminPageState extends State<AdminPage>
           const SnackBar(
             content: Text("Failed to refresh requests."),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
+            duration: Duration(seconds: 4),
           ),
         );
       }
@@ -623,26 +623,25 @@ class _AdminPageState extends State<AdminPage>
             icon: const Icon(Icons.person_pin_circle_rounded, color: Colors.white),
             tooltip: "Switch to Attendance View",
             onPressed: () async {
+              final nav = Navigator.of(context);
               final prefs = await SharedPreferences.getInstance();
               final deviceSerial = prefs.getString('deviceSerialNumber') ?? 'unknown_device_id';
               final companyId = prefs.getString('companyId') ?? '';
               final empId = prefs.getString('empId') ?? '0';
               final token = prefs.getString('authToken') ?? '';
-              if (mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CheckInOutScreen(
-                      empName: widget.empName,
-                      empId: empId,
-                      authToken: token,
-                      deviceSerialNumber: deviceSerial,
-                      companyId: companyId,
-                      isAdmin: true,
-                    ),
+              if (!mounted) return;
+              nav.pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => CheckInOutScreen(
+                    empName: widget.empName,
+                    empId: empId,
+                    authToken: token,
+                    deviceSerialNumber: deviceSerial,
+                    companyId: companyId,
+                    isAdmin: true,
                   ),
-                );
-              }
+                ),
+              );
             },
           ),
           IconButton(
@@ -652,15 +651,14 @@ class _AdminPageState extends State<AdminPage>
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
+              final nav = Navigator.of(context);
               final prefs = await SharedPreferences.getInstance();
               await prefs.clear();
-              if (mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      (route) => false,
-                );
-              }
+              if (!mounted) return;
+              nav.pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
             },
           ),
         ],

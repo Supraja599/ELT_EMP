@@ -317,7 +317,7 @@ class _LeaveScreenState extends State<LeaveScreen>
       final data = jsonDecode(response.body);
       if (data['status'] == 'success') {
         final List raw = data['leaves'] ?? data['history'] ?? [];
-        if (raw.isNotEmpty && mounted) {
+        if (mounted) {
           final apiLeaves = raw
               .map((e) => Map<String, dynamic>.from(e))
               .toList();
@@ -326,7 +326,6 @@ class _LeaveScreenState extends State<LeaveScreen>
           await prefs.setString(_localCacheKey, jsonEncode(apiLeaves));
           setState(() => _leaveHistory = apiLeaves);
         }
-        // If API returns empty but local has data — keep showing local data
       }
     } catch (_) {
       // API not available — already showing local cache, nothing to do
@@ -558,7 +557,32 @@ class _LeaveScreenState extends State<LeaveScreen>
 
     // Support both flat map and nested 'types' list from API
     final List<Map<String, dynamic>> balanceItems = [];
-    if (_leaveBalance!.containsKey('types')) {
+    if (_leaveBalance!.containsKey('balances')) {
+      final balances = _leaveBalance!['balances'];
+      if (balances is Map<String, dynamic>) {
+        balances.forEach((key, val) {
+          String displayName = key.replaceAll('_', ' ').split(' ').map((word) {
+            if (word.isEmpty) return '';
+            return word[0].toUpperCase() + word.substring(1);
+          }).join(' ');
+
+          // Match Leave Type ID for icons
+          String typeId = '1';
+          if (key.toLowerCase().contains('comp')) {
+            typeId = '2';
+          } else if (key.toLowerCase().contains('earned')) {
+            typeId = '3';
+          }
+
+          balanceItems.add({
+            'name': displayName,
+            'balance': val,
+            'total': 0.0,
+            'id': typeId,
+          });
+        });
+      }
+    } else if (_leaveBalance!.containsKey('types')) {
       final List raw = _leaveBalance!['types'] ?? [];
       balanceItems.addAll(raw.map((e) => Map<String, dynamic>.from(e)));
     } else {
@@ -571,7 +595,12 @@ class _LeaveScreenState extends State<LeaveScreen>
       };
       leaveMap.forEach((name, balance) {
         if (balance != null) {
-          balanceItems.add({'name': name, 'balance': balance, 'total': _leaveBalance!['${name.toLowerCase().replaceAll(' ', '_')}_total']});
+          balanceItems.add({
+            'name': name,
+            'balance': balance,
+            'total': _leaveBalance!['${name.toLowerCase().replaceAll(' ', '_')}_total'],
+            'id': name.toLowerCase().contains('casual') ? '1' : (name.toLowerCase().contains('comp') ? '2' : '3'),
+          });
         }
       });
     }
@@ -615,12 +644,16 @@ class _LeaveScreenState extends State<LeaveScreen>
     final pct = total > 0 ? (balance / total).clamp(0.0, 1.0) : 0.0;
 
     Color barColor;
-    if (pct > 0.5) {
-      barColor = Colors.green;
-    } else if (pct > 0.25) {
-      barColor = Colors.orange;
+    if (total > 0) {
+      if (pct > 0.5) {
+        barColor = Colors.green;
+      } else if (pct > 0.25) {
+        barColor = Colors.orange;
+      } else {
+        barColor = Colors.red;
+      }
     } else {
-      barColor = Colors.red;
+      barColor = balance > 0 ? Colors.teal : Colors.grey;
     }
 
     return Container(
@@ -637,7 +670,24 @@ class _LeaveScreenState extends State<LeaveScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: barColor.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _leaveTypeIcon(item['id']?.toString() ?? ''),
+                      color: barColor,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                ],
+              ),
               RichText(
                 text: TextSpan(
                   children: [
@@ -673,6 +723,12 @@ class _LeaveScreenState extends State<LeaveScreen>
                 Text('Available: ${balance.toStringAsFixed(0)} days', style: TextStyle(fontSize: 12, color: barColor)),
                 Text('Used: ${used.toStringAsFixed(0)} days', style: const TextStyle(fontSize: 12, color: Colors.grey)),
               ],
+            ),
+          ] else ...[
+            const SizedBox(height: 10),
+            Text(
+              'Available: ${balance.toStringAsFixed(balance == balance.roundToDouble() ? 0 : 1)} days',
+              style: TextStyle(fontSize: 12, color: barColor, fontWeight: FontWeight.w500),
             ),
           ],
         ],
@@ -716,12 +772,12 @@ class _LeaveScreenState extends State<LeaveScreen>
 
   Widget _buildHistoryCard(Map<String, dynamic> leave) {
     final type = leave['leave_type']?.toString() ?? leave['leave_type_name']?.toString() ?? 'Leave';
-    final fromDate = leave['from_date']?.toString() ?? '';
-    final toDate = leave['to_date']?.toString() ?? '';
+    final fromDate = leave['from_date']?.toString() ?? leave['leave_from']?.toString() ?? '';
+    final toDate = leave['to_date']?.toString() ?? leave['leave_to']?.toString() ?? '';
     final days = leave['total_days']?.toString() ?? leave['days']?.toString() ?? '1';
     final status = leave['status']?.toString() ?? 'pending';
     final reason = leave['reason']?.toString() ?? '';
-    final managerRemarks = leave['manager_remarks']?.toString() ?? leave['remarks']?.toString() ?? '';
+    final managerRemarks = leave['manager_remarks']?.toString() ?? leave['remarks']?.toString() ?? leave['comments']?.toString() ?? '';
 
     final statusColor = _leaveStatusColor(status);
 

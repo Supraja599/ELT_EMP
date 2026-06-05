@@ -8,7 +8,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:flutter/services.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -330,9 +329,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       if (!isConnected && !_isNoInternetDialogShowing) {
         _showNoInternetDialog();
       } else if (isConnected && _isNoInternetDialogShowing) {
-        Navigator.of(
-          context,
-        ).pop(); // Close dialog when connectivity is restored
+        if (mounted) Navigator.of(context).pop();
         _isNoInternetDialogShowing = false;
         // Retry critical operations
         await _loadShiftsAsync();
@@ -1788,7 +1785,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                   TextButton(
                     onPressed: () async {
                       await Permission.ignoreBatteryOptimizations.request();
-                      Navigator.pop(ctx);
+                      if (ctx.mounted) Navigator.pop(ctx);
                     },
                     child: const Text("Open Settings Now"),
                   ),

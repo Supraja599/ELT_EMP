@@ -264,7 +264,7 @@ class _WorkUpdateScreenState extends State<WorkUpdateScreen> {
                 _label("Next Action"),
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  value: _selectedNextAction,
+                  initialValue: _selectedNextAction,
                   decoration: _inputDecoration(hint: "Select next action"),
                   items: const [
                     DropdownMenuItem(
@@ -323,7 +323,7 @@ class _WorkUpdateScreenState extends State<WorkUpdateScreen> {
                 _label("Program Available"),
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  value: _selectedProgramAvailable,
+                  initialValue: _selectedProgramAvailable,
                   decoration:
                   _inputDecoration(hint: "Select program availability"),
                   items: const [

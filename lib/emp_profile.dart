@@ -10,11 +10,11 @@ class EmpProfile extends StatefulWidget {
   final String authToken;
 
   const EmpProfile({
-    Key? key,
+    super.key,
     required this.empId,
     required this.authToken,
-    required String empName, // optional, unused
-  }) : super(key: key);
+    required String empName,
+  });
 
   @override
   State<EmpProfile> createState() => _EmpProfileState();

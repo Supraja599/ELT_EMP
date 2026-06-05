@@ -12,14 +12,14 @@ class MoreScreen extends StatelessWidget {
   final bool isAdmin;
 
   const MoreScreen({
-    Key? key,
+    super.key,
     required this.authToken,
     required this.empId,
     required this.empName,
     required this.deviceSerialNumber,
     required this.companyId,
     this.isAdmin = false,
-  }) : super(key: key);
+  });
 
   /// Check internet connectivity
   Future<bool> _hasInternet() async {
@@ -41,10 +41,10 @@ class MoreScreen extends StatelessWidget {
   /// Back press handler
   Future<bool> _onWillPop(BuildContext context) async {
     if (!await _hasInternet()) {
-      _showNoInternetDialog(context);
+      if (context.mounted) _showNoInternetDialog(context);
       return false;
     }
-
+    if (!context.mounted) return false;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
@@ -57,7 +57,7 @@ class MoreScreen extends StatelessWidget {
           isAdmin: isAdmin,
         ),
       ),
-          (route) => false,
+      (route) => false,
     );
     return false;
   }
@@ -108,10 +108,10 @@ class MoreScreen extends StatelessWidget {
                   const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () async {
                     if (!await _hasInternet()) {
-                      _showNoInternetDialog(context);
+                      if (context.mounted) _showNoInternetDialog(context);
                       return;
                     }
-
+                    if (!context.mounted) return;
                     Navigator.push(
                       context,
                       MaterialPageRoute(

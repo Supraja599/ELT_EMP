@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 class PayslipScreen extends StatefulWidget {
-  const PayslipScreen({Key? key}) : super(key: key);
+  const PayslipScreen({super.key});
 
   @override
-  _PayslipScreenState createState() => _PayslipScreenState();
+  State<PayslipScreen> createState() => _PayslipScreenState();
 }
 
 class _PayslipScreenState extends State<PayslipScreen> {

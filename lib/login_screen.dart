@@ -275,10 +275,11 @@ class _LoginScreenState extends State<LoginScreen> {
           }
 
           // Navigate
+          if (!mounted) return;
+          final nav = Navigator.of(context);
           if (role == "admin") {
             debugPrint('👑 Navigating to Admin Page');
-            Navigator.pushReplacement(
-              context,
+            nav.pushReplacement(
               MaterialPageRoute(
                 builder: (_) => AdminPage(
                   empName: empName,
@@ -292,8 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           } else {
             debugPrint('👤 Navigating to Employee CheckInOut Screen');
-            Navigator.pushReplacement(
-              context,
+            nav.pushReplacement(
               MaterialPageRoute(
                 builder: (_) => CheckInOutScreen(
                   empName: empName,
