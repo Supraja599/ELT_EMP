@@ -525,11 +525,14 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     switch (code) {
       case 'P':    return Colors.green.shade500;
       case 'A':    return Colors.red.shade400;
-      case 'L':    return Colors.blue.shade400;
+      case 'L':    return Colors.yellow.shade700;   // Leave = yellow
       case 'OT':
       case 'LT':
-      case 'LATE': return Colors.orange.shade500;
-      case 'HD':   return Colors.yellow.shade700;
+      case 'LATE': return Colors.orange.shade500;   // Late/OT = orange
+      case 'HD':
+      case 'CO':
+      case 'COMPOFF': return Colors.orange.shade400; // Half Day / Comp Off = orange
+      case 'H':    return Colors.red.shade100;       // Holiday = same bg as Sunday
       case 'WO':   return Colors.purple.shade200;
       default:     return isSunday ? Colors.red.shade100 : Colors.transparent;
     }
@@ -666,7 +669,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 const SizedBox(width: 6),
                 _calSummaryItem('Absent', absentCount, Colors.red.shade400),
                 const SizedBox(width: 6),
-                _calSummaryItem('Leave', leaveCount, Colors.blue.shade400),
+                _calSummaryItem('Leave', leaveCount, Colors.yellow.shade700),
                 const SizedBox(width: 6),
                 _calSummaryItem('Late', lateCount, Colors.orange.shade500),
               ],
@@ -740,15 +743,21 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       // Eltrive (others): column 0 = Sunday (auto-detected)
                       final isVHS = _companyId == '2';
                       final isWOByApi = code == 'WO';
+                      final isHoliday = code == 'H';
                       final isEltriveSunday = !isVHS && (i % 7) == 0;
                       final showWSymbol = isWOByApi;
-                      final showSSymbol = isEltriveSunday && !isWOByApi;
+                      final showHSymbol = isHoliday;
+                      final showSSymbol = isEltriveSunday && !isWOByApi && !isHoliday;
 
                       Color bg;
                       if (isFuture) {
                         bg = isEltriveSunday
                             ? Colors.red.shade50
-                            : (isWOByApi ? Colors.purple.shade50 : Colors.transparent);
+                            : isWOByApi
+                                ? Colors.purple.shade50
+                                : isHoliday
+                                    ? Colors.red.shade50
+                                    : Colors.transparent;
                       } else {
                         bg = _calStatusColor(code, isSunday: isEltriveSunday);
                       }
@@ -757,19 +766,20 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       final isLightBg = bg == Colors.red.shade100 ||
                           bg == Colors.red.shade50 ||
                           bg == Colors.yellow.shade700 ||
+                          bg == Colors.orange.shade400 ||
                           bg == Colors.purple.shade200 ||
                           bg == Colors.purple.shade50 ||
                           bg == Colors.transparent;
                       final textColor = isLightBg
-                          ? (isEltriveSunday
-                              ? Colors.red.shade600
+                          ? (isEltriveSunday || isHoliday
+                              ? Colors.red.shade700
                               : isWOByApi
                                   ? Colors.purple.shade700
                                   : Colors.black87)
                           : Colors.white;
 
-                      // Which special symbol (W or S) to show below the day number
-                      final symbol = showWSymbol ? 'W' : (showSSymbol ? 'S' : null);
+                      // Symbol to show: W=WeekOff, H=Holiday, S=Sunday, else null
+                      final symbol = showWSymbol ? 'W' : (showHSymbol ? 'H' : (showSSymbol ? 'S' : null));
 
                       return GestureDetector(
                         onTap: isFuture
@@ -832,9 +842,10 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
               children: [
                 _calLegendDot(Colors.green.shade500, 'Present'),
                 _calLegendDot(Colors.red.shade400, 'Absent'),
-                _calLegendDot(Colors.blue.shade400, 'Leave'),
-                _calLegendDot(Colors.orange.shade500, 'Late'),
-                _calLegendDot(Colors.yellow.shade700, 'Half Day'),
+                _calLegendDot(Colors.yellow.shade700, 'Leave'),
+                _calLegendDot(Colors.orange.shade500, 'Late / OT'),
+                _calLegendDot(Colors.orange.shade400, 'Half Day / CO'),
+                _calLegendDot(Colors.red.shade100, 'Holiday (H)'),
                 if (_companyId == '2')
                   _calLegendDot(Colors.purple.shade200, 'Week Off (W)')
                 else
@@ -2909,7 +2920,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         debugPrint(
           'Button State: isAllowedToCheckIn=$isAllowedToCheckIn, isAllowedToCheckOut=$isAllowedToCheckOut, selectedShift=$selectedShift, isProcessing=$isProcessing, activeShift=${empShifts.any((shift) => shift['id'] == selectedShift && shift['isActive'] as bool)}',
         );
-        return Column(
+        return SafeArea(
+          bottom: false,
+          child: Column(
           children: [
             // Fixed header — stays visible while body scrolls
             Padding(
@@ -3381,6 +3394,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
               ),
             ),
           ],
+          ),
         );
       }
       switch (index) {
