@@ -813,9 +813,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         final forceUpdate = data['force_update'] as bool? ?? false;
         final storeUrl = data['play_store_url']?.toString() ?? 'https://play.google.com/store/apps/details?id=com.ELT_EMP.as_f';
         
-        // This local version matches version 8 (the one currently live in store).
-        // For your next push, change this to 9 so it matches build.gradle.kts!
-        const int localAppVersionCode = 8; 
+        const int localAppVersionCode = 10;
         
         if (latestVersion > localAppVersionCode && forceUpdate) {
           _showForcedUpdateDialog(storeUrl);
