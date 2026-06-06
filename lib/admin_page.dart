@@ -625,7 +625,7 @@ class _AdminPageState extends State<AdminPage>
             onPressed: () async {
               final nav = Navigator.of(context);
               final prefs = await SharedPreferences.getInstance();
-              final deviceSerial = prefs.getString('deviceSerialNumber') ?? 'unknown_device_id';
+              final deviceSerial = prefs.getString('deviceSerialNumber') ?? '';
               final companyId = prefs.getString('companyId') ?? '';
               final empId = prefs.getString('empId') ?? '0';
               final token = prefs.getString('authToken') ?? '';
