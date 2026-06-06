@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:android_id/android_id.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'admin_page.dart';
@@ -132,7 +133,25 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       if (i < max) await Future.delayed(const Duration(milliseconds: 500));
     }
-    return "unknown_device_id";
+
+    // Fallback: use device fingerprint so each phone gets a unique stable ID
+    try {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      final fallback = androidInfo.fingerprint.isNotEmpty
+          ? androidInfo.fingerprint
+          : androidInfo.id;
+      if (fallback.isNotEmpty) {
+        await prefs.setString("deviceSerialNumber", fallback);
+        return fallback;
+      }
+    } catch (e) {
+      debugPrint("DeviceInfo fallback failed: $e");
+    }
+
+    // Last resort: unique timestamp-based ID saved permanently
+    final uuid = DateTime.now().millisecondsSinceEpoch.toString();
+    await prefs.setString("deviceSerialNumber", uuid);
+    return uuid;
   }
 
   Future<Position?> getLocation() async {
@@ -208,10 +227,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final deviceId = await getDeviceId();
       debugPrint("📱 DEVICE SERIAL NUMBER: $deviceId");
-      if (deviceId == "unknown_device_id") {
-        _showSnack("Failed to get device ID. Restart the app.");
-        return;
-      }
+      // device ID is always valid now (no unknown_device_id fallback)
 
       final pos = await getLocation();
       final lat = pos?.latitude.toString() ?? "0.0";
