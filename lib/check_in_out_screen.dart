@@ -653,25 +653,21 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     }
   }
   Future<void> _requestBatteryOptimization() async {
-    const String prefKeyBatteryPrompt = 'last_battery_optimization_prompt';
+    const String prefKeyShown = 'battery_prompt_shown_once';
     final prefs = await SharedPreferences.getInstance();
 
+    // Already granted - nothing to do
     if (await Permission.ignoreBatteryOptimizations.isGranted) {
       return;
     }
 
-    final lastPromptTimeStr = prefs.getString(prefKeyBatteryPrompt);
-    final now = DateTime.now();
-    final lastPromptTime =
-        lastPromptTimeStr != null ? DateTime.parse(lastPromptTimeStr) : null;
-    const promptInterval = Duration(days: 3);
-
-    if (lastPromptTime != null &&
-        now.difference(lastPromptTime) <= promptInterval) {
+    // Already shown once on first install - never show again
+    if (prefs.getBool(prefKeyShown) == true) {
       return;
     }
 
-    await prefs.setString(prefKeyBatteryPrompt, now.toIso8601String());
+    // Mark as shown so it never appears again
+    await prefs.setBool(prefKeyShown, true);
 
     if (!mounted) return;
 
