@@ -521,16 +521,16 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     _safeSetState(() => _calLoading = false);
   }
 
-  Color _calStatusColor(String? code) {
+  Color _calStatusColor(String? code, {bool isSunday = false}) {
     switch (code) {
-      case 'P':  return Colors.green.shade500;
-      case 'A':  return Colors.red.shade400;
-      case 'L':  return Colors.blue.shade400;
-      case 'WO': return Colors.grey.shade400;
-      case 'H':  return Colors.teal.shade400;
-      case 'HD': return Colors.amber.shade600;
-      case 'OT': return Colors.orange.shade400;
-      default:   return Colors.transparent;
+      case 'P':    return Colors.green.shade500;
+      case 'A':    return Colors.red.shade400;
+      case 'L':    return Colors.blue.shade400;
+      case 'OT':
+      case 'LT':
+      case 'LATE': return Colors.orange.shade500;
+      case 'WO':   return Colors.blueGrey.shade200;
+      default:     return isSunday ? Colors.blueGrey.shade200 : Colors.transparent;
     }
   }
 
@@ -549,6 +549,35 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     );
   }
 
+  Widget _calSummaryItem(String label, int count, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(fontSize: 10, color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAttendanceCalendar() {
     final now = DateTime.now();
     final firstDay = DateTime(_calYear, _calMonth, 1);
@@ -557,6 +586,14 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final firstWeekday = firstDay.weekday == 7 ? 0 : firstDay.weekday;
     final monthName = DateFormat('MMMM yyyy').format(firstDay);
     final totalCells = ((firstWeekday + daysInMonth + 6) ~/ 7) * 7;
+
+    // Summary counts
+    final presentCount = _calData.values.where((c) => c == 'P').length;
+    final absentCount = _calData.values.where((c) => c == 'A').length;
+    final leaveCount = _calData.values.where((c) => c == 'L').length;
+    final lateCount = _calData.values
+        .where((c) => c == 'OT' || c == 'LT' || c == 'LATE')
+        .length;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -619,26 +656,47 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
               ],
             ),
           ),
+          // Summary count row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Row(
+              children: [
+                _calSummaryItem('Present', presentCount, Colors.green.shade500),
+                const SizedBox(width: 6),
+                _calSummaryItem('Absent', absentCount, Colors.red.shade400),
+                const SizedBox(width: 6),
+                _calSummaryItem('Leave', leaveCount, Colors.blue.shade400),
+                const SizedBox(width: 6),
+                _calSummaryItem('Late', lateCount, Colors.orange.shade500),
+              ],
+            ),
+          ),
+          const Divider(height: 10, thickness: 0.5),
           // Day-of-week headers
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Row(
-              children: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
-                  .map(
-                    (d) => Expanded(
-                      child: Center(
-                        child: Text(
-                          d,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black45,
+              children: [
+                    ...[' Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+                        .asMap()
+                        .entries
+                        .map(
+                          (e) => Expanded(
+                            child: Center(
+                              child: Text(
+                                e.value.trim(),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: e.key == 0
+                                      ? Colors.blueGrey.shade400
+                                      : Colors.black45,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  )
-                  .toList(),
+                  ],
             ),
           ),
           const SizedBox(height: 4),
@@ -666,6 +724,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       if (dayNum <= 0 || dayNum > daysInMonth) {
                         return const SizedBox();
                       }
+                      // Column 0 = Sunday
+                      final isSunday = (i % 7) == 0;
                       final isToday = now.year == _calYear &&
                           now.month == _calMonth &&
                           now.day == dayNum;
@@ -675,8 +735,16 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                         dayNum,
                       ).isAfter(DateTime(now.year, now.month, now.day));
                       final code = _calData[dayNum];
-                      final bg =
-                          isFuture ? Colors.transparent : _calStatusColor(code);
+                      Color bg;
+                      if (isFuture) {
+                        bg = isSunday
+                            ? Colors.blueGrey.shade50
+                            : Colors.transparent;
+                      } else {
+                        bg = _calStatusColor(code, isSunday: isSunday);
+                      }
+                      final isColoured = bg != Colors.transparent &&
+                          bg != Colors.blueGrey.shade50;
                       return Container(
                         decoration: BoxDecoration(
                           color: bg,
@@ -696,9 +764,11 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                               fontWeight: isToday
                                   ? FontWeight.bold
                                   : FontWeight.normal,
-                              color: bg == Colors.transparent
-                                  ? Colors.black54
-                                  : Colors.white,
+                              color: isColoured
+                                  ? Colors.white
+                                  : (isSunday
+                                      ? Colors.blueGrey.shade400
+                                      : Colors.black54),
                             ),
                           ),
                         ),
@@ -716,9 +786,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 _calLegendDot(Colors.green.shade500, 'Present'),
                 _calLegendDot(Colors.red.shade400, 'Absent'),
                 _calLegendDot(Colors.blue.shade400, 'Leave'),
-                _calLegendDot(Colors.amber.shade600, 'Half Day'),
-                _calLegendDot(Colors.grey.shade400, 'Week Off'),
-                _calLegendDot(Colors.teal.shade400, 'Holiday'),
+                _calLegendDot(Colors.orange.shade500, 'Late'),
+                _calLegendDot(Colors.blueGrey.shade200, 'Sunday'),
               ],
             ),
           ),
@@ -726,7 +795,6 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       ),
     );
   }
-
   /// Returns the correct logo widget for the logged-in employee's company.
   /// - If the server provided a logo URL â†’ show it (network image).
   /// - Eltrive companies (ID 1 or 2) â†’ show Eltrive logo asset.
