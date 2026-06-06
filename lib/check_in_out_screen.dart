@@ -448,6 +448,11 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   int _selectedIndex = 0;
   bool isProcessing = false;
   bool _isSessionDialogShowing = false;
+  bool _isFetching = false;
+
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
   StreamSubscription<Position>? positionStream;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   bool _isConnected = true;
@@ -480,7 +485,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final logo     = prefs.getString("companyLogo") ?? "";
     final cId      = prefs.getString("companyId")   ?? "";
     if (mounted) {
-      setState(() {
+      _safeSetState(() {
         _companyLogoUrl = logo;
         _companyId      = cId;
       });
@@ -552,7 +557,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   void _initializeConnectivityMonitoring() {
     // Initial connectivity check
     _checkInternetConnectivity().then((isConnected) {
-      setState(() {
+      _safeSetState(() {
         _isConnected = isConnected;
         if (!isConnected && !_isNoInternetDialogShowing) {
           _showNoInternetDialog();
@@ -565,7 +570,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       List<ConnectivityResult> results,
     ) async {
       bool isConnected = await _checkInternetConnectivity();
-      setState(() {
+      _safeSetState(() {
         _isConnected = isConnected;
       });
       if (!isConnected && !_isNoInternetDialogShowing) {
@@ -761,7 +766,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
     matchedShift ??= empShifts.first;
 
-    setState(() {
+    _safeSetState(() {
       selectedShift = matchedShift!['id'];
     });
     debugPrint('Auto-detected and selected shift: ${matchedShift['name']} (ID: $selectedShift)');
@@ -769,19 +774,19 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
   Future<void> _loadShiftsAsync() async {
     try {
-      setState(() => isShiftsLoading = true);
+      _safeSetState(() => isShiftsLoading = true);
       await _initializeApp();
       if (!_isConnected) {
         if (mounted && !_isNoInternetDialogShowing) {
           _showNoInternetDialog();
         }
-        setState(() => isShiftsLoading = false);
+        _safeSetState(() => isShiftsLoading = false);
         return;
       }
       await _syncPendingLocations();
-      setState(() => isShiftsLoading = false);
+      _safeSetState(() => isShiftsLoading = false);
     } catch (_) {
-      setState(() => isShiftsLoading = false);
+      _safeSetState(() => isShiftsLoading = false);
     }
   }
 
@@ -971,7 +976,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
     final userRole = prefs.getString('userRole') ?? '';
     final savedIsAdmin = prefs.getBool('isAdminUser') ?? false;
-    setState(() {
+    _safeSetState(() {
       isAdminUser = widget.isAdmin || userRole == 'admin' || widget.empId == '0' || widget.empId == 'admin' || savedIsAdmin;
     });
     debugPrint('DEBUG ADMIN CHECK END:');
@@ -1080,7 +1085,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         if (data['status'] == 'ok') {
           // ── Auto-checkout triggered by server ─────────────────────────
           if (data['auto_checkout'] == true) {
-            setState(() {
+            _safeSetState(() {
               isCheckedIn = false;
               isAllowedToCheckIn = true;
               isAllowedToCheckOut = false;
@@ -1352,7 +1357,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                   Navigator.pop(context);
                   _isNoInternetDialogShowing = false;
                   if (await _checkInternetConnectivity()) {
-                    setState(() => _isConnected = true);
+                    _safeSetState(() => _isConnected = true);
                     await fetchShifts();
                     await fetchStatus();
                     await _syncPendingLocations();
@@ -1410,7 +1415,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       }
     ];
 
-    setState(() {
+    _safeSetState(() {
       empShifts = defaultShifts;
       isShiftSelectable = true;
     });
@@ -1421,6 +1426,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   }
 
   Future<void> fetchShifts() async {
+    if (_isFetching) return;
     if (!_isConnected) {
       _handleError('No internet connection', Exception('Please try again'));
       if (!_isNoInternetDialogShowing) {
@@ -1428,9 +1434,10 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       }
       return;
     }
+    _isFetching = true;
     tz_data.initializeTimeZones();
     final ist = tz.getLocation('Asia/Kolkata');
-    setState(() => isShiftsLoading = true);
+    _safeSetState(() => isShiftsLoading = true);
     try {
       final response = await ApiService.fetchShifts(
         empId: widget.empId,
@@ -1528,7 +1535,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           });
         }
 
-        setState(() {
+        _safeSetState(() {
           empShifts = newShifts;
           // Selectable only when there are multiple shifts
           isShiftSelectable = newShifts.length > 1;
@@ -1537,7 +1544,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         if (!isCheckedIn) {
           if (newShifts.length == 1) {
             // Only one shift assigned — auto-select immediately, no user action needed
-            setState(() => selectedShift = newShifts[0]['id']);
+            _safeSetState(() => selectedShift = newShifts[0]['id']);
             debugPrint('Single shift auto-selected: ${newShifts[0]['name']}');
           } else {
             _autoSelectShift();
@@ -1552,7 +1559,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       _populateDefaultShifts();
       debugPrint('fetchShifts exception: $e');
     } finally {
-      setState(() => isShiftsLoading = false);
+      _isFetching = false;
+      _safeSetState(() => isShiftsLoading = false);
     }
   }
 
@@ -1573,7 +1581,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       return;
     }
     try {
-      setState(() => isStatusLoading = true);
+      _safeSetState(() => isStatusLoading = true);
       final response = await ApiService.fetchStatus(
         empId: widget.empId,
         authToken: widget.authToken,
@@ -1634,7 +1642,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
               '$start12:${startMin.toString().padLeft(2, '0')} $startPeriod - '
               '$end12:${endMin.toString().padLeft(2, '0')} $endPeriod${overnight ? ' (Next Day)' : ''}';
         }
-        setState(() {
+        _safeSetState(() {
           isCheckedIn = data['current_status'] == 'checked_in';
           isAllowedToCheckIn = !isCheckedIn;
           isAllowedToCheckOut = isCheckedIn;
@@ -1701,7 +1709,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     } catch (e) {
       debugPrint('fetchStatus exception: $e');
     } finally {
-      setState(() => isStatusLoading = false);
+      _safeSetState(() => isStatusLoading = false);
     }
   }
 
@@ -1767,7 +1775,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     }
 
     try {
-      setState(() {
+      _safeSetState(() {
         isProcessingCheckIn = true;
         isProcessing = true;
       });
@@ -1802,7 +1810,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         workingDuration = _parseDuration(cumTimeStr);
         sessionStart = DateTime.now();
         checkInTime = DateFormat('hh:mm:ss a').format(sessionStart!);
-        setState(() => totalWorkingHours = _formatDuration(workingDuration));
+        _safeSetState(() => totalWorkingHours = _formatDuration(workingDuration));
 
         await _saveState();
 
@@ -1891,7 +1899,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       _handleError('Check-In Error', e);
       await _showNotification(title: 'Check-In Error', body: 'Error: $e');
     } finally {
-      setState(() {
+      _safeSetState(() {
         isProcessingCheckIn = false;
         isProcessing = false;
       });
@@ -1962,7 +1970,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       return;
     }
 
-    setState(() {
+    _safeSetState(() {
       isProcessingCheckOut = true;
       isProcessing = true;
     });
@@ -1994,7 +2002,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         final cumTimeStr = data['cumulative_working_hours'] ?? '00:00:00';
         workingDuration = _parseDuration(cumTimeStr);
 
-        setState(() => totalWorkingHours = _formatDuration(workingDuration));
+        _safeSetState(() => totalWorkingHours = _formatDuration(workingDuration));
 
         await _saveState();
 
@@ -2061,7 +2069,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       _handleError('Check-Out Error', e);
       await _showNotification(title: 'Check-Out Error', body: 'Error: $e');
     } finally {
-      setState(() {
+      _safeSetState(() {
         isProcessingCheckOut = false;
         isProcessing = false;
       });
@@ -2238,7 +2246,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   void startWorkingTimer() {
     workingTimer?.cancel();
     workingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      setState(() {
+      _safeSetState(() {
         workingDuration += const Duration(seconds: 1);
         totalWorkingHours = _formatDuration(workingDuration);
       });
@@ -2252,7 +2260,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
   void updateTime() {
     final now = DateTime.now();
-    setState(() {
+    _safeSetState(() {
       currentTime = DateFormat('hh:mm:ss a').format(now);
     });
 
@@ -2491,7 +2499,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         showUnselectedLabels: true,
         currentIndex: _selectedIndex,
         onTap: (int index) {
-          setState(() {
+          _safeSetState(() {
             _selectedIndex = index;
           });
         },
@@ -2791,7 +2799,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                   'Are you sure you want to select the shift: $selectedShiftName?',
                                 );
                                 if (confirmed) {
-                                  setState(() {
+                                  _safeSetState(() {
                                     selectedShift = value;
                                   });
                                 }
