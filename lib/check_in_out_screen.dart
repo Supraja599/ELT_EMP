@@ -745,9 +745,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       final isWOByApi = code == 'WO';
                       final isHoliday = code == 'H';
                       final isEltriveSunday = !isVHS && (i % 7) == 0;
-                      final showWSymbol = isWOByApi;
-                      final showHSymbol = isHoliday;
-                      final showSSymbol = isEltriveSunday && !isWOByApi && !isHoliday;
+                      final showWSymbol = isWOByApi && !isEltriveSunday; // VHS WO only
+                      final showHSymbol = isHoliday && !isEltriveSunday;        // Holiday on non-Sunday
+                      final showSSymbol = isEltriveSunday;                       // Sunday ALWAYS S
 
                       Color bg;
                       if (isFuture) {
@@ -758,25 +758,29 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                 : isHoliday
                                     ? Colors.red.shade50
                                     : Colors.transparent;
+                      } else if (isEltriveSunday) {
+                        // Sunday is ALWAYS light-red — ignore API status (P/A/etc.)
+                        bg = Colors.red.shade100;
                       } else {
-                        bg = _calStatusColor(code, isSunday: isEltriveSunday);
+                        bg = _calStatusColor(code, isSunday: false);
                       }
 
                       // Text colour based on background
-                      final isLightBg = bg == Colors.red.shade100 ||
-                          bg == Colors.red.shade50 ||
-                          bg == Colors.yellow.shade700 ||
+                      // Text colour: dark on light bg, white on dark bg
+                      Color textColor;
+                      if (isEltriveSunday) {
+                        textColor = Colors.red.shade700;
+                      } else if (isWOByApi) {
+                        textColor = Colors.purple.shade700;
+                      } else if (isHoliday || bg == Colors.red.shade100) {
+                        textColor = Colors.red.shade700;
+                      } else if (bg == Colors.yellow.shade700 ||
                           bg == Colors.orange.shade400 ||
-                          bg == Colors.purple.shade200 ||
-                          bg == Colors.purple.shade50 ||
-                          bg == Colors.transparent;
-                      final textColor = isLightBg
-                          ? (isEltriveSunday || isHoliday
-                              ? Colors.red.shade700
-                              : isWOByApi
-                                  ? Colors.purple.shade700
-                                  : Colors.black87)
-                          : Colors.white;
+                          bg == Colors.transparent) {
+                        textColor = Colors.black87;
+                      } else {
+                        textColor = Colors.white; // dark bg: green, red, blue, orange
+                      }
 
                       // Symbol to show: W=WeekOff, H=Holiday, S=Sunday, else null
                       final symbol = showWSymbol ? 'W' : (showHSymbol ? 'H' : (showSSymbol ? 'S' : null));
