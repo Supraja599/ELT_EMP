@@ -26,6 +26,7 @@
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:exported="false"
             android:foregroundServiceType="location"
+            android:stopWithTask="false"
             tools:replace="android:exported"
             tools:ignore="ForegroundServicePermission" />
         <service
