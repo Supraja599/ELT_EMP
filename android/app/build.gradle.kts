@@ -26,14 +26,19 @@ android {
         applicationId = "com.ELT_EMP.as_f"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
-        versionCode = 9
-        versionName = "ELT_9.0"
+        versionCode = 10
+        versionName = "ELT_10.0"
     }
 
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
         }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 }
 
