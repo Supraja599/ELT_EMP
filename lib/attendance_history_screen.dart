@@ -28,6 +28,13 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
   int? _highlightedDay;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -93,6 +100,24 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         parsed.sort((a, b) => (a['day_num'] as int).compareTo(b['day_num'] as int));
 
         setState(() => _records = parsed);
+
+        // Auto-scroll to highlighted record after build
+        if (_highlightedDay != null) {
+          final idx = parsed.indexWhere((r) => r['day_num'] == _highlightedDay);
+          if (idx >= 0) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              // ~90 (summary row) + 16 (top padding) + idx * 110 (card + margin)
+              final offset = 106.0 + idx * 110.0;
+              if (_scrollController.hasClients) {
+                _scrollController.animateTo(
+                  offset,
+                  duration: const Duration(milliseconds: 450),
+                  curve: Curves.easeInOut,
+                );
+              }
+            });
+          }
+        }
       } else {
         setState(() => _error = data['message'] ?? 'Failed to fetch attendance');
       }
@@ -324,6 +349,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
               : RefreshIndicator(
                   onRefresh: _fetchHistory,
                   child: ListView(
+                    controller: _scrollController,
                     padding: const EdgeInsets.all(16),
                     children: [
                       // ── Summary Cards ───────────────────────────────────────
@@ -448,10 +474,13 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         color: isHighlighted ? Colors.teal.shade50 : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: isHighlighted
-            ? Border.all(color: Colors.teal.shade400, width: 2)
+            ? Border.all(color: Colors.teal.shade600, width: 2.5)
             : null,
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2)),
+          if (isHighlighted)
+            BoxShadow(color: Colors.teal.withValues(alpha: 0.25), blurRadius: 10, spreadRadius: 1, offset: const Offset(0, 3))
+          else
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: Padding(

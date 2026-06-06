@@ -797,28 +797,16 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                 : null,
                           ),
                           child: symbol != null
-                              ? Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      '$dayNum',
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
-                                        color: textColor,
-                                        height: 1.1,
-                                      ),
+                              // Sunday or Week-Off: show only the letter (S or W)
+                              ? Center(
+                                  child: Text(
+                                    symbol,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: textColor,
                                     ),
-                                    Text(
-                                      symbol,
-                                      style: TextStyle(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.bold,
-                                        color: textColor,
-                                        height: 0.9,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 )
                               : Center(
                                   child: Text(
