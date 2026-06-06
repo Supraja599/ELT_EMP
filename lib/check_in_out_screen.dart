@@ -529,8 +529,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       case 'OT':
       case 'LT':
       case 'LATE': return Colors.orange.shade500;
-      case 'WO':   return Colors.blueGrey.shade200;
-      default:     return isSunday ? Colors.blueGrey.shade200 : Colors.transparent;
+      case 'HD':   return Colors.yellow.shade700;
+      case 'WO':   return Colors.red.shade100;
+      default:     return isSunday ? Colors.red.shade100 : Colors.transparent;
     }
   }
 
@@ -738,39 +739,81 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       Color bg;
                       if (isFuture) {
                         bg = isSunday
-                            ? Colors.blueGrey.shade50
+                            ? Colors.red.shade50
                             : Colors.transparent;
                       } else {
                         bg = _calStatusColor(code, isSunday: isSunday);
                       }
-                      final isColoured = bg != Colors.transparent &&
-                          bg != Colors.blueGrey.shade50;
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: bg,
-                          shape: BoxShape.circle,
-                          border: isToday
-                              ? Border.all(
-                                  color: Colors.teal.shade700,
-                                  width: 2,
-                                )
-                              : null,
-                        ),
-                        child: Center(
-                          child: Text(
-                            '$dayNum',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: isToday
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isColoured
-                                  ? Colors.white
-                                  : (isSunday
-                                      ? Colors.blueGrey.shade400
-                                      : Colors.black54),
-                            ),
+                      final hasStatus = !isFuture && code != null && code.isNotEmpty;
+                      final isDarkBg = hasStatus &&
+                          bg != Colors.red.shade100 &&
+                          bg != Colors.yellow.shade700 &&
+                          bg != Colors.red.shade50;
+                      final textColor = isDarkBg
+                          ? Colors.white
+                          : (isSunday
+                              ? Colors.red.shade600
+                              : Colors.black87);
+
+                      return GestureDetector(
+                        onTap: isFuture
+                            ? null
+                            : () {
+                                final tappedDate = DateTime(_calYear, _calMonth, dayNum);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AttendanceHistoryScreen(
+                                      empId: widget.empId,
+                                      authToken: widget.authToken,
+                                      empName: widget.empName,
+                                      initialDate: tappedDate,
+                                    ),
+                                  ),
+                                );
+                              },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: bg,
+                            shape: BoxShape.circle,
+                            border: isToday
+                                ? Border.all(color: Colors.teal.shade700, width: 2)
+                                : null,
                           ),
+                          child: isSunday
+                              ? Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '$dayNum',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: textColor,
+                                        height: 1.1,
+                                      ),
+                                    ),
+                                    Text(
+                                      'S',
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.bold,
+                                        color: textColor,
+                                        height: 0.9,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Center(
+                                  child: Text(
+                                    '$dayNum',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: textColor,
+                                    ),
+                                  ),
+                                ),
                         ),
                       );
                     },
@@ -787,7 +830,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 _calLegendDot(Colors.red.shade400, 'Absent'),
                 _calLegendDot(Colors.blue.shade400, 'Leave'),
                 _calLegendDot(Colors.orange.shade500, 'Late'),
-                _calLegendDot(Colors.blueGrey.shade200, 'Sunday'),
+                _calLegendDot(Colors.yellow.shade700, 'Half Day'),
+                _calLegendDot(Colors.red.shade100, 'Sunday'),
               ],
             ),
           ),
@@ -2858,20 +2902,13 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         debugPrint(
           'Button State: isAllowedToCheckIn=$isAllowedToCheckIn, isAllowedToCheckOut=$isAllowedToCheckOut, selectedShift=$selectedShift, isProcessing=$isProcessing, activeShift=${empShifts.any((shift) => shift['id'] == selectedShift && shift['isActive'] as bool)}',
         );
-        return RefreshIndicator(
-          onRefresh: () async {
-            await fetchShifts();
-            await fetchStatus();
-          },
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-            children: [
-            const SizedBox(height: 12),
+        return Column(
+          children: [
+            // Fixed header — stays visible while body scrolls
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: SizedBox(
-                height: 90,
+                height: 68,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
@@ -2933,7 +2970,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 2),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: RichText(
@@ -2944,7 +2981,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       text: '${_getGreetingMessage()} : ',
                       style: const TextStyle(
                         color: Color(0xFF039C0D),
-                        fontSize: 18,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -2952,7 +2989,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       text: widget.empName.toUpperCase(),
                       style: const TextStyle(
                         color: Color(0xFF0C0D0C),
-                        fontSize: 18,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -2960,14 +2997,26 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 2),
             Text(
               today,
-              style: const TextStyle(fontSize: 16, color: Colors.black54),
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+            const Divider(height: 8, thickness: 0.5, indent: 16, endIndent: 16),
+            // ── Scrollable body ────────────────────────────────────────────
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  await fetchShifts();
+                  await fetchStatus();
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                  children: [
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
               child: isShiftsLoading || isStatusLoading
                   ? const Center(child: CircularProgressIndicator())
                   // ── Single shift → show as a locked info card ──────────────
@@ -3112,7 +3161,16 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       ),
                     ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
+            // Total working hours — shown above buttons
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'Shifts Working Time: $totalWorkingHours',
+                style: const TextStyle(color: Color(0xFF121111), fontSize: 14),
+              ),
+            ),
+            const SizedBox(height: 6),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
@@ -3160,7 +3218,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                 ? 1.0
                                 : 0.4,
                         child: Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1AEA24),
                             borderRadius: BorderRadius.circular(12),
@@ -3171,28 +3229,28 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                 'In',
                                 style: TextStyle(
                                   color: Colors.black,
-                                  fontSize: 20,
+                                  fontSize: 16,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               const Icon(
                                 Icons.login,
-                                size: 36,
+                                size: 28,
                                 color: Colors.black,
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 6),
                               Text(
                                 checkInTime,
                                 style: const TextStyle(
                                   color: Colors.black,
-                                  fontSize: 16,
+                                  fontSize: 13,
                                 ),
                               ),
                               const Text(
                                 'Check In',
                                 style: TextStyle(
                                   color: Colors.black,
-                                  fontSize: 14,
+                                  fontSize: 12,
                                 ),
                               ),
                             ],
@@ -3214,7 +3272,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                         opacity:
                             (isAllowedToCheckOut && !isProcessing) ? 1.0 : 0.4,
                         child: Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
                             color: const Color(0xFFE53935),
                             borderRadius: BorderRadius.circular(12),
@@ -3225,28 +3283,28 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                 'Out',
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 20,
+                                  fontSize: 16,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               const Icon(
                                 Icons.logout,
-                                size: 36,
+                                size: 28,
                                 color: Colors.white,
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 6),
                               Text(
                                 checkOutTime,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 16,
+                                  fontSize: 13,
                                 ),
                               ),
                               const Text(
                                 'Check Out',
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 14,
+                                  fontSize: 12,
                                 ),
                               ),
                             ],
@@ -3258,14 +3316,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 ],
               ),
             ),
-            const SizedBox(height: 32),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                'Shifts Working Time: $totalWorkingHours',
-                style: const TextStyle(color: Color(0xFF121111), fontSize: 16),
-              ),
-            ),
+            const SizedBox(height: 10),
             // Attendance calendar
             _buildAttendanceCalendar(),
             const SizedBox(height: 20),
@@ -3317,10 +3368,13 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
               ),
             ),
             const SizedBox(height: 24),
+                  ],
+                  ),
+                ),
+              ),
+            ),
           ],
-        ),
-      ),
-      );
+        );
       }
       switch (index) {
         case 1:
