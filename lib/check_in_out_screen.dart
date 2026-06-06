@@ -50,14 +50,20 @@ void callbackDispatcher() {
         final prefs = await SharedPreferences.getInstance();
         final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
         if (!isCheckedIn) {
-          debugPrint('Not checked in â†’ skipping');
+          debugPrint('Not checked in - skipping');
           return true;
         }
 
-        // ... (your existing location permission + get position code remains same)
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        final lastSentMs = prefs.getInt('last_location_sent_ms') ?? 0;
+        if (nowMs - lastSentMs < 9 * 60 * 1000) {
+          debugPrint('Workmanager: duplicate skipped');
+          return true;
+        }
+        await prefs.setInt('last_location_sent_ms', nowMs);
 
         final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
+          desiredAccuracy: LocationAccuracy.medium,
         );
 
         final payload = {
@@ -218,8 +224,16 @@ void onStart(ServiceInstance service) async {
       }
 
       try {
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        final lastSentMs = prefs.getInt('last_location_sent_ms') ?? 0;
+        if (nowMs - lastSentMs < 9 * 60 * 1000) {
+          debugPrint('BG service: duplicate skipped');
+          return;
+        }
+        await prefs.setInt('last_location_sent_ms', nowMs);
+
         final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
+          desiredAccuracy: LocationAccuracy.medium,
         );
 
         final payload = {
@@ -1246,6 +1260,14 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         _,
       ) async {
         try {
+          final dedupePrefs = await SharedPreferences.getInstance();
+          final nowMs = DateTime.now().millisecondsSinceEpoch;
+          final lastSentMs = dedupePrefs.getInt('last_location_sent_ms') ?? 0;
+          if (nowMs - lastSentMs < 9 * 60 * 1000) {
+            return;
+          }
+          await dedupePrefs.setInt('last_location_sent_ms', nowMs);
+
           final position = await _getCurrentLocation();
           await _sendLocationUpdate(
             empId: widget.empId,
