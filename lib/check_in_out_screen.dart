@@ -657,7 +657,6 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final prefs = await SharedPreferences.getInstance();
 
     if (await Permission.ignoreBatteryOptimizations.isGranted) {
-      debugPrint('Battery optimization exemption already granted');
       return;
     }
 
@@ -665,39 +664,40 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final now = DateTime.now();
     final lastPromptTime =
         lastPromptTimeStr != null ? DateTime.parse(lastPromptTimeStr) : null;
-    const promptInterval = Duration(days: 1);
+    const promptInterval = Duration(days: 3);
 
-    if (lastPromptTime == null ||
-        now.difference(lastPromptTime) > promptInterval) {
-      if (await Permission.ignoreBatteryOptimizations.isDenied) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                'Please disable battery optimization for continuous location tracking.',
-              ),
-              duration: const Duration(seconds: 5),
-              action: SnackBarAction(
-                label: 'Open Settings',
-                onPressed: () async {
-                  await Permission.ignoreBatteryOptimizations.request();
-                  await prefs.setString(
-                    prefKeyBatteryPrompt,
-                    now.toIso8601String(),
-                  );
-                },
-              ),
-            ),
-          );
-        }
-        debugPrint('Battery optimization exemption denied, prompted user');
-        await Permission.ignoreBatteryOptimizations.request();
-        await prefs.setString(prefKeyBatteryPrompt, now.toIso8601String());
-      }
-    } else {
-      debugPrint(
-        'Battery optimization prompt skipped (recently prompted at $lastPromptTimeStr)',
-      );
+    if (lastPromptTime != null &&
+        now.difference(lastPromptTime) <= promptInterval) {
+      return;
+    }
+
+    await prefs.setString(prefKeyBatteryPrompt, now.toIso8601String());
+
+    if (!mounted) return;
+
+    final granted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Allow Background Location'),
+        content: const Text(
+          'To track your attendance accurately even when the app is closed or minimized, please allow this app to run in the background without battery restrictions. Tap Allow on the next screen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Skip'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Allow'),
+          ),
+        ],
+      ),
+    );
+
+    if (granted == true) {
+      await Permission.ignoreBatteryOptimizations.request();
     }
   }  void _autoSelectShift() {
     if (selectedShift != null && selectedShift!.isNotEmpty) {
@@ -1200,7 +1200,10 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
     positionStream?.cancel();
     positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.medium,
+        distanceFilter: 30,
+      ),
     ).listen(
       (position) async {
         if (isCheckedIn) {
