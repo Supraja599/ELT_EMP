@@ -475,8 +475,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     updateTime();
+    // Only need minute precision for the 9:15 AM reminder check
     clockTimer = Timer.periodic(
-      const Duration(seconds: 1),
+      const Duration(minutes: 1),
       (_) => updateTime(),
     );
     _initNotifications();
@@ -2627,9 +2628,6 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
   void updateTime() {
     final now = DateTime.now();
-    _safeSetState(() {
-      currentTime = DateFormat('hh:mm:ss a').format(now);
-    });
 
     // Check for 9:15 AM Check-In Reminder
     if (now.hour == 9 && now.minute == 15 && !isCheckedIn) {
