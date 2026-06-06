@@ -7,12 +7,14 @@ class AttendanceHistoryScreen extends StatefulWidget {
   final String empId;
   final String authToken;
   final String empName;
+  final DateTime? initialDate;
 
   const AttendanceHistoryScreen({
     super.key,
     required this.empId,
     required this.authToken,
     required this.empName,
+    this.initialDate,
   });
 
   @override
@@ -25,10 +27,16 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
   String _error = '';
   int _selectedMonth = DateTime.now().month;
   int _selectedYear = DateTime.now().year;
+  int? _highlightedDay;
 
   @override
   void initState() {
     super.initState();
+    if (widget.initialDate != null) {
+      _selectedMonth = widget.initialDate!.month;
+      _selectedYear  = widget.initialDate!.year;
+      _highlightedDay = widget.initialDate!.day;
+    }
     _fetchHistory();
   }
 
@@ -400,11 +408,17 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         ? DateFormat('EEE, dd MMM yyyy').format(parsedDate)
         : date;
 
+    final dayNum = record['day_num'] as int? ?? 0;
+    final isHighlighted = _highlightedDay != null && dayNum == _highlightedDay;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isHighlighted ? Colors.teal.shade50 : Colors.white,
         borderRadius: BorderRadius.circular(14),
+        border: isHighlighted
+            ? Border.all(color: Colors.teal.shade400, width: 2)
+            : null,
         boxShadow: [
           BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2)),
         ],
