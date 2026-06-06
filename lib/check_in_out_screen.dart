@@ -530,7 +530,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       case 'LT':
       case 'LATE': return Colors.orange.shade500;
       case 'HD':   return Colors.yellow.shade700;
-      case 'WO':   return Colors.red.shade100;
+      case 'WO':   return Colors.purple.shade200;
       default:     return isSunday ? Colors.red.shade100 : Colors.transparent;
     }
   }
@@ -725,8 +725,6 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       if (dayNum <= 0 || dayNum > daysInMonth) {
                         return const SizedBox();
                       }
-                      // Column 0 = Sunday
-                      final isSunday = (i % 7) == 0;
                       final isToday = now.year == _calYear &&
                           now.month == _calMonth &&
                           now.day == dayNum;
@@ -736,24 +734,42 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                         dayNum,
                       ).isAfter(DateTime(now.year, now.month, now.day));
                       final code = _calData[dayNum];
+
+                      // Company-aware Week Off / Sunday detection
+                      // VHS (company 2): week off is any day the API marks WO
+                      // Eltrive (others): column 0 = Sunday (auto-detected)
+                      final isVHS = _companyId == '2';
+                      final isWOByApi = code == 'WO';
+                      final isEltriveSunday = !isVHS && (i % 7) == 0;
+                      final showWSymbol = isWOByApi;
+                      final showSSymbol = isEltriveSunday && !isWOByApi;
+
                       Color bg;
                       if (isFuture) {
-                        bg = isSunday
+                        bg = isEltriveSunday
                             ? Colors.red.shade50
-                            : Colors.transparent;
+                            : (isWOByApi ? Colors.purple.shade50 : Colors.transparent);
                       } else {
-                        bg = _calStatusColor(code, isSunday: isSunday);
+                        bg = _calStatusColor(code, isSunday: isEltriveSunday);
                       }
-                      final hasStatus = !isFuture && code != null && code.isNotEmpty;
-                      final isDarkBg = hasStatus &&
-                          bg != Colors.red.shade100 &&
-                          bg != Colors.yellow.shade700 &&
-                          bg != Colors.red.shade50;
-                      final textColor = isDarkBg
-                          ? Colors.white
-                          : (isSunday
+
+                      // Text colour based on background
+                      final isLightBg = bg == Colors.red.shade100 ||
+                          bg == Colors.red.shade50 ||
+                          bg == Colors.yellow.shade700 ||
+                          bg == Colors.purple.shade200 ||
+                          bg == Colors.purple.shade50 ||
+                          bg == Colors.transparent;
+                      final textColor = isLightBg
+                          ? (isEltriveSunday
                               ? Colors.red.shade600
-                              : Colors.black87);
+                              : isWOByApi
+                                  ? Colors.purple.shade700
+                                  : Colors.black87)
+                          : Colors.white;
+
+                      // Which special symbol (W or S) to show below the day number
+                      final symbol = showWSymbol ? 'W' : (showSSymbol ? 'S' : null);
 
                       return GestureDetector(
                         onTap: isFuture
@@ -780,7 +796,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                 ? Border.all(color: Colors.teal.shade700, width: 2)
                                 : null,
                           ),
-                          child: isSunday
+                          child: symbol != null
                               ? Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -794,7 +810,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                       ),
                                     ),
                                     Text(
-                                      'S',
+                                      symbol,
                                       style: TextStyle(
                                         fontSize: 8,
                                         fontWeight: FontWeight.bold,
@@ -831,7 +847,10 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 _calLegendDot(Colors.blue.shade400, 'Leave'),
                 _calLegendDot(Colors.orange.shade500, 'Late'),
                 _calLegendDot(Colors.yellow.shade700, 'Half Day'),
-                _calLegendDot(Colors.red.shade100, 'Sunday'),
+                if (_companyId == '2')
+                  _calLegendDot(Colors.purple.shade200, 'Week Off (W)')
+                else
+                  _calLegendDot(Colors.red.shade100, 'Sunday (S)'),
               ],
             ),
           ),
