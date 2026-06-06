@@ -246,15 +246,16 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
 
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'present': return Colors.green;
-      case 'late': return Colors.orange;
-      case 'absent': return Colors.red;
-      case 'half day': case 'half-day': return Colors.amber.shade700;
-      case 'leave': return Colors.blue;
-      case 'ot': case 'overtime': return Colors.purple;
-      case 'holiday': return Colors.teal;
-      case 'weekly off': case 'weekoff': return Colors.blueGrey;
-      default: return Colors.grey;
+      case 'present':                        return Colors.green;
+      case 'late':                           return Colors.orange.shade500;
+      case 'absent':                         return Colors.red;
+      case 'half day': case 'half-day':
+      case 'comp off': case 'compoff':       return Colors.orange.shade400;
+      case 'leave':                          return Colors.yellow.shade700;
+      case 'ot': case 'overtime':            return Colors.orange.shade500;
+      case 'holiday':                        return Colors.red.shade300;
+      case 'weekly off': case 'weekoff':     return Colors.purple.shade300;
+      default:                               return Colors.grey;
     }
   }
 
