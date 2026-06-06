@@ -194,6 +194,31 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     );
   }
 
+  /// Opens a full calendar so the user can jump to any month by picking a date.
+  Future<void> _pickByCalendar() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(_selectedYear, _selectedMonth, 1),
+      firstDate: DateTime(2020, 1),
+      lastDate: DateTime.now(),
+      helpText: 'Pick a month to view',
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: Colors.teal),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedMonth = picked.month;
+        _selectedYear  = picked.year;
+        _highlightedDay = null;
+      });
+      _fetchHistory();
+    }
+  }
+
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
       case 'present': return Colors.green;
@@ -257,6 +282,12 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black87),
         actions: [
+          // Calendar picker — pick any date to jump to that month
+          IconButton(
+            icon: const Icon(Icons.calendar_month_rounded, color: Colors.teal),
+            tooltip: 'Pick by calendar',
+            onPressed: _pickByCalendar,
+          ),
           TextButton.icon(
             onPressed: _pickMonthYear,
             icon: const Icon(Icons.tune_rounded, color: Colors.teal, size: 18),
