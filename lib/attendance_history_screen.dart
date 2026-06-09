@@ -54,7 +54,8 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
       case 'A':  return 'Absent';
       case 'L':  return 'Leave';
       case 'WO': return 'Weekly Off';
-      case 'H':  return 'Holiday';
+      case 'O':  return 'Holiday';
+      case 'H':
       case 'HD': return 'Half Day';
       case 'OT': return 'Overtime';
       default:   return code;

@@ -562,11 +562,12 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       case 'LT':
       case 'LATE':
         return Colors.orange.shade500; // Late/OT = orange
+      case 'H':  // Half Day (API code H)
       case 'HD':
       case 'CO':
       case 'COMPOFF':
         return Colors.orange.shade400; // Half Day / Comp Off = orange
-      case 'H':
+      case 'O':
         return Colors.red.shade100; // Holiday = same bg as Sunday
       case 'WO':
         return Colors.purple.shade200;
@@ -786,7 +787,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                     // VHS (company 2): week off is any day the API marks WO
                     // Eltrive (others): column 0 = Sunday (auto-detected)
                     final isWOByApi = code == 'WO';
-                    final isHoliday = code == 'H';
+                    final isHoliday = code == 'O';
                     final isEltriveSunday = !_isVHS && (i % 7) == 0; // Sunday light-red: Company 1 only
                     final showWSymbol =
                         isWOByApi && !isEltriveSunday; // VHS WO only
