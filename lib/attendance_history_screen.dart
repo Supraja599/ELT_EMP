@@ -106,8 +106,8 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
           final idx = parsed.indexWhere((r) => r['day_num'] == _highlightedDay);
           if (idx >= 0) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              // ~90 (summary row) + 16 (top padding) + idx * 110 (card + margin)
-              final offset = 106.0 + idx * 110.0;
+              // ~90 (summary row) + 16 (top padding) + 48 (table header) + idx * 44 (row height)
+              final offset = 170.0 + idx * 44.0;
               if (_scrollController.hasClients) {
                 _scrollController.animateTo(
                   offset,
@@ -259,19 +259,6 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     }
   }
 
-  IconData _statusIcon(String status) {
-    switch (status.toLowerCase()) {
-      case 'present': return Icons.check_circle_rounded;
-      case 'late': return Icons.schedule_rounded;
-      case 'absent': return Icons.cancel_rounded;
-      case 'half day': case 'half-day': return Icons.timelapse_rounded;
-      case 'leave': return Icons.beach_access_rounded;
-      case 'ot': case 'overtime': return Icons.star_rounded;
-      case 'holiday': return Icons.celebration_rounded;
-      case 'weekly off': case 'weekoff': return Icons.weekend_rounded;
-      default: return Icons.help_outline_rounded;
-    }
-  }
 
   Map<String, int> _getSummary() {
     final counts = <String, int>{'present': 0, 'late': 0, 'absent': 0, 'leave': 0};
@@ -367,7 +354,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // ── Records ─────────────────────────────────────────────
+                      // ── Records Table ───────────────────────────────────────
                       if (_records.isEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 60),
@@ -383,7 +370,7 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
                           ),
                         )
                       else
-                        ..._records.map(_buildRecordCard),
+                        _buildRecordsTable(),
                     ],
                   ),
                 ),
@@ -443,138 +430,129 @@ class _AttendanceHistoryScreenState extends State<AttendanceHistoryScreen> {
     );
   }
 
-  Widget _buildRecordCard(Map<String, dynamic> record) {
-    final date = record['date']?.toString() ?? '';
-    final checkIn = record['check_in_time']?.toString()
-        ?? record['checkin_time']?.toString()
-        ?? '--:--';
-    final checkOut = record['check_out_time']?.toString()
-        ?? record['checkout_time']?.toString()
-        ?? '--:--';
-    final totalHours = record['total_hours']?.toString()
-        ?? record['working_hours']?.toString()
-        ?? '--:--';
-    final status = record['status']?.toString() ?? 'Present';
-    final shiftName = record['shift_name']?.toString() ?? '';
-    final isLate = record['is_late'] == true || record['is_late'] == 1;
-    final isEarlyOut = record['is_early_checkout'] == true || record['is_early_checkout'] == 1;
-    final otHours = record['ot_hours']?.toString() ?? '';
-
-    DateTime? parsedDate;
-    try { parsedDate = DateTime.parse(date); } catch (_) {}
-    final displayDate = parsedDate != null
-        ? DateFormat('EEE, dd MMM yyyy').format(parsedDate)
-        : date;
-
-    final dayNum = record['day_num'] as int? ?? 0;
-    final isHighlighted = _highlightedDay != null && dayNum == _highlightedDay;
-
+  Widget _buildRecordsTable() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: isHighlighted ? Colors.teal.shade50 : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: isHighlighted
-            ? Border.all(color: Colors.teal.shade600, width: 2.5)
-            : null,
-        boxShadow: [
-          if (isHighlighted)
-            BoxShadow(color: Colors.teal.withValues(alpha: 0.25), blurRadius: 10, spreadRadius: 1, offset: const Offset(0, 3))
-          else
-            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6, offset: const Offset(0, 2)),
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 4))],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Column(
+        children: [
+          // Header
+          Container(
+            decoration: const BoxDecoration(
+              color: Color(0xFF00695C), // teal.shade700
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: const Row(
               children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: _statusColor(status).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(_statusIcon(status), color: _statusColor(status), size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(displayDate, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      if (shiftName.isNotEmpty)
-                        Text(shiftName, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _statusColor(status),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    status,
-                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                ),
+                _AhCell(text: 'Date',    isHeader: true, flex: 3),
+                _AhCell(text: 'In',      isHeader: true, flex: 2),
+                _AhCell(text: 'Out',     isHeader: true, flex: 2),
+                _AhCell(text: 'Hours',   isHeader: true, flex: 2),
+                _AhCell(text: 'Status',  isHeader: true, flex: 3),
               ],
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _timeChip(Icons.login_rounded, checkIn, Colors.green),
-                const SizedBox(width: 12),
-                _timeChip(Icons.logout_rounded, checkOut, Colors.red),
-                const SizedBox(width: 12),
-                _timeChip(Icons.timer_rounded, totalHours, Colors.blue),
-              ],
-            ),
-            // Flags row
-            if (isLate || isEarlyOut || otHours.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
+          ),
+          // Rows
+          ...List.generate(_records.length, (i) {
+            final r = _records[i];
+            final date      = r['date']?.toString() ?? '';
+            final checkIn   = r['check_in_time']?.toString() ?? '--:--';
+            final checkOut  = r['check_out_time']?.toString() ?? '--:--';
+            final hours     = r['total_hours']?.toString() ?? '--';
+            final status    = r['status']?.toString() ?? '';
+            final dayNum    = r['day_num'] as int? ?? 0;
+            final isHighlighted = _highlightedDay != null && dayNum == _highlightedDay;
+            final statusColor   = _statusColor(status);
+
+            String dayStr = '';
+            try {
+              final dt = DateTime.parse(date);
+              dayStr = DateFormat('dd MMM').format(dt);
+            } catch (_) { dayStr = date; }
+
+            Color rowColor;
+            if (isHighlighted) {
+              rowColor = Colors.teal.shade50;
+            } else {
+              rowColor = i % 2 == 0 ? Colors.grey.shade50 : Colors.white;
+            }
+
+            return Container(
+              decoration: BoxDecoration(
+                color: rowColor,
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200),
+                  left: isHighlighted
+                      ? BorderSide(color: Colors.teal.shade600, width: 3)
+                      : BorderSide.none,
+                ),
+                borderRadius: i == _records.length - 1
+                    ? const BorderRadius.vertical(bottom: Radius.circular(16))
+                    : BorderRadius.zero,
+              ),
+              child: Row(
                 children: [
-                  if (isLate)
-                    _flagChip('Late Check-in', Colors.orange),
-                  if (isEarlyOut)
-                    _flagChip('Early Check-out', Colors.deepOrange),
-                  if (otHours.isNotEmpty)
-                    _flagChip('OT: $otHours', Colors.purple),
+                  _AhCell(text: dayStr,   flex: 3),
+                  _AhCell(text: checkIn,  flex: 2),
+                  _AhCell(text: checkOut, flex: 2),
+                  _AhCell(text: hours,    flex: 2),
+                  Expanded(
+                    flex: 3,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                        ),
+                        child: Text(
+                          status,
+                          style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ],
-          ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _AhCell extends StatelessWidget {
+  final String text;
+  final bool isHeader;
+  final int flex;
+
+  const _AhCell({required this.text, this.isHeader = false, required this.flex});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: isHeader ? 11 : 11,
+            fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+            color: isHeader ? Colors.white : Colors.black87,
+          ),
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
-    );
-  }
-
-  Widget _timeChip(IconData icon, String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 13, color: color),
-        const SizedBox(width: 3),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-      ],
-    );
-  }
-
-  Widget _flagChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(label, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600)),
     );
   }
 }

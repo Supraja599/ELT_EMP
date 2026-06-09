@@ -694,6 +694,28 @@ class ApiService {
   }
 
   /// 18. Submit Work Sheet Entry
+  static Future<http.Response> applyPettyCash({
+    required String authToken,
+    required double amount,
+    required String purpose,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/petty-cash/request',
+      authToken: authToken,
+      body: {'auth_token': authToken, 'requested_amount': amount, 'purpose': purpose},
+    );
+  }
+
+  static Future<http.Response> fetchPettyCashHistory({
+    required String authToken,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/petty-cash/list',
+      authToken: authToken,
+      body: {'auth_token': authToken},
+    );
+  }
+
   static Future<http.Response> submitWorkUpdate({
     required Map<String, dynamic> body,
   }) async {

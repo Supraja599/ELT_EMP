@@ -238,7 +238,8 @@ class _SplashScreenState extends State<SplashScreen> {
       final empId = prefs.getString('empId') ?? '';
       final deviceSerial = prefs.getString('deviceSerialNumber') ?? '';
       final userRole = prefs.getString('userRole') ?? '';
-      final companyId = prefs.getString('companyId') ?? ''; // ✅ ADD
+      final companyId   = prefs.getString('companyId')    ?? '';
+      final companyLogo = prefs.getString('companyLogo')  ?? '';
 
 
       await Future.delayed(const Duration(seconds: 2));
@@ -268,8 +269,8 @@ class _SplashScreenState extends State<SplashScreen> {
               empId: empId,
               authToken: authToken,
               deviceSerialNumber: deviceSerial,
-              companyId: companyId, // ✅ ADD
-
+              companyId: companyId,
+              companyLogo: companyLogo,
             ),
           ),
         );

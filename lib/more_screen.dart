@@ -40,6 +40,24 @@ class MoreScreen extends StatelessWidget {
 
   /// Back press handler
   Future<bool> _onWillPop(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Go Back?'),
+        content: const Text('Are you sure you want to go back?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return false;
     if (!await _hasInternet()) {
       if (context.mounted) _showNoInternetDialog(context);
       return false;

@@ -259,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           final role = json['user_role']?.toString() ?? (empId == "0" ? "admin" : "employee");
 
-          debugPrint('🆔 Login success - Role: $role, Emp ID: $empId, Auth Token: ${authToken.substring(0, 20)}...');
+          debugPrint('🆔 Login success - Role: $role, Emp ID: $empId, Company ID: $companyId, Auth Token: ${authToken.substring(0, 20)}...');
 
           // Save login data
           final companyLogo = json['company_logo']?.toString() ?? "";
@@ -316,8 +316,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   empId: empId,
                   authToken: authToken,
                   deviceSerialNumber: deviceId,
-                  companyId: companyId, // ✅ ADD
-
+                  companyId: companyId,
+                  companyLogo: companyLogo,
                 ),
               ),
             );

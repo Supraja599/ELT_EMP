@@ -23,6 +23,7 @@ import 'login_screen.dart';
 import 'ot_late_request_screen.dart';
 import 'requests.dart';
 import 'expenses_screen.dart';
+import 'vhs_expenses_screen.dart';
 import 'more_screen.dart';
 import 'emp_profile.dart';
 import 'services/api_service.dart';
@@ -44,7 +45,9 @@ int _backgroundLocationSendCount = 0; // optional - to show how many times sent
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     if (task == finalLocationTask) {
-      debugPrint('Workmanager task executed at ${DateTime.now().toIso8601String()}');
+      debugPrint(
+        'Workmanager task executed at ${DateTime.now().toIso8601String()}',
+      );
 
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -77,7 +80,8 @@ void callbackDispatcher() {
         };
 
         final connectivityResults = await Connectivity().checkConnectivity();
-        if (connectivityResults.isNotEmpty && !connectivityResults.contains(ConnectivityResult.none)) {
+        if (connectivityResults.isNotEmpty &&
+            !connectivityResults.contains(ConnectivityResult.none)) {
           final response = await ApiService.sendLocationUpdate(payload);
 
           final data = jsonDecode(response.body);
@@ -98,25 +102,28 @@ void callbackDispatcher() {
             String notificationBody;
             if (data['auto_checkout'] == true) {
               notificationBody =
-              'Auto-checkout triggered!\nTotal hours: ${data['cumulative_working_hours'] ?? 'N/A'}';
+                  'Auto-checkout triggered!\nTotal hours: ${data['cumulative_working_hours'] ?? 'N/A'}';
               await prefs.setBool('is_checked_in', false);
               await Workmanager().cancelByUniqueName(finalLocationTask);
             } else if (action == 'wait_for_approval') {
               notificationBody = 'Location recorded — pending shift approval';
             } else {
               notificationBody =
-              'Background location sent (${_backgroundLocationSendCount}x today)';
+                  'Background location sent (${_backgroundLocationSendCount}x today)';
             }
 
             await bgPlugin.show(
               DateTime.now().millisecondsSinceEpoch % 10000, // unique id
-              data['auto_checkout'] == true ? 'Auto Checkout' : 'Attendance Tracking',
+              data['auto_checkout'] == true
+                  ? 'Auto Checkout'
+                  : 'Attendance Tracking',
               notificationBody,
               const NotificationDetails(
                 android: AndroidNotificationDetails(
                   'attendance_channel_id',
                   'Attendance Notifications',
-                  channelDescription: 'Background location & attendance updates',
+                  channelDescription:
+                      'Background location & attendance updates',
                   importance: Importance.defaultImportance,
                   priority: Priority.defaultPriority,
                   ticker: 'Location sent',
@@ -150,6 +157,7 @@ void callbackDispatcher() {
     return true;
   });
 }
+
 Future<void> _storePendingLocation(
   Map<String, dynamic> payload,
   SharedPreferences prefs,
@@ -177,7 +185,9 @@ void onStart(ServiceInstance service) async {
       final prefs = await SharedPreferences.getInstance();
       final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
       if (isCheckedIn) {
-        debugPrint('User is still checked-in → background tracking will rely on Workmanager');
+        debugPrint(
+          'User is still checked-in → background tracking will rely on Workmanager',
+        );
       }
       service.stopSelf();
     });
@@ -194,10 +204,8 @@ void onStart(ServiceInstance service) async {
   // Initialize notifications in background isolate
   final bgPlugin = FlutterLocalNotificationsPlugin();
   const AndroidInitializationSettings androidInit =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
-  await bgPlugin.initialize(
-    const InitializationSettings(android: androidInit),
-  );
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+  await bgPlugin.initialize(const InitializationSettings(android: androidInit));
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'attendance_channel_id',
@@ -207,7 +215,9 @@ void onStart(ServiceInstance service) async {
     playSound: true,
   );
   await bgPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >()
       ?.createNotificationChannel(channel);
 
   Timer? bgLocationTimer;
@@ -215,7 +225,9 @@ void onStart(ServiceInstance service) async {
   void startBgLocationTimer() {
     bgLocationTimer?.cancel();
 
-    bgLocationTimer = Timer.periodic(const Duration(seconds: 600), (timer) async {
+    bgLocationTimer = Timer.periodic(const Duration(seconds: 600), (
+      timer,
+    ) async {
       if (!isCheckedIn) {
         debugPrint('Background: User not checked in → stopping location timer');
         timer.cancel();
@@ -315,7 +327,9 @@ Future<bool> onIosBackground(ServiceInstance service) async {
   final isCheckedIn = prefs.getBool('is_checked_in') ?? false;
   if (!isCheckedIn) {
     await Workmanager().cancelByUniqueName(finalLocationTask);
-    debugPrint('Canceled Workmanager task in iOS background as user is not checked in');
+    debugPrint(
+      'Canceled Workmanager task in iOS background as user is not checked in',
+    );
     return true;
   }
 
@@ -339,7 +353,9 @@ Future<bool> onIosBackground(ServiceInstance service) async {
     };
 
     final connectivityResults = await Connectivity().checkConnectivity();
-    final isConnected = connectivityResults.isNotEmpty && !connectivityResults.contains(ConnectivityResult.none);
+    final isConnected =
+        connectivityResults.isNotEmpty &&
+        !connectivityResults.contains(ConnectivityResult.none);
     if (isConnected) {
       try {
         final response = await ApiService.sendLocationUpdate(payload);
@@ -392,13 +408,13 @@ Future<bool> onIosBackground(ServiceInstance service) async {
   return true;
 }
 
-
 class CheckInOutScreen extends StatefulWidget {
   final String empName;
   final String empId;
   final String authToken;
   final String deviceSerialNumber;
   final String companyId;
+  final String companyLogo;
   final bool isAdmin;
 
   const CheckInOutScreen({
@@ -407,7 +423,8 @@ class CheckInOutScreen extends StatefulWidget {
     required this.empId,
     required this.authToken,
     required this.deviceSerialNumber,
-    required this.companyId, // âœ…
+    required this.companyId,
+    this.companyLogo = '',
     this.isAdmin = false,
   });
 
@@ -459,20 +476,31 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
   void _safeSetState(VoidCallback fn) {
     if (mounted) setState(fn);
   }
+
   StreamSubscription<Position>? positionStream;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   bool _isConnected = true;
   bool _isNoInternetDialogShowing = false;
   bool isAdminUser = false;
   String _companyLogoUrl = "";
-  String _companyId = "";
+  DateTime? _lastAutoRefresh;
 
-  // Eltrive = company_id "1", VHS hospital = company_id "2"
-  bool get _isHospitalAccount => _companyId == '2';
+  // VHS detected by logo URL keywords (visakha /
+  //vhs / hospital / vhc)
+  bool get _isVHS {
+    final logo = _companyLogoUrl.toLowerCase();
+    return logo.contains('vhs') ||
+        logo.contains('visakha') ||
+        logo.contains('hospital') ||
+        logo.contains('vhc');
+  }
 
   @override
   void initState() {
     super.initState();
+    _companyLogoUrl =
+        widget
+            .companyLogo; // set immediately — don't wait for SharedPreferences
     WidgetsBinding.instance.addObserver(this);
     updateTime();
     // Only need minute precision for the 9:15 AM reminder check
@@ -490,13 +518,12 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
   Future<void> _loadCompanyLogo() async {
     final prefs = await SharedPreferences.getInstance();
-    final logo     = prefs.getString("companyLogo") ?? "";
-    final cId      = prefs.getString("companyId")   ?? "";
+    final logo = prefs.getString("companyLogo") ?? "";
+    debugPrint(
+      '🏢 companyLogo URL: $logo  |  isVHS: ${logo.toLowerCase().contains('vhs') || logo.toLowerCase().contains('visakha') || logo.toLowerCase().contains('hospital') || logo.toLowerCase().contains('vhc')}',
+    );
     if (mounted) {
-      _safeSetState(() {
-        _companyLogoUrl = logo;
-        _companyId      = cId;
-      });
+      _safeSetState(() => _companyLogoUrl = logo);
     }
   }
 
@@ -514,7 +541,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         final Map<int, String> result = {};
         daysMap.forEach((key, value) {
           final dayNum = int.tryParse(key.replaceAll('day', '')) ?? 0;
-          if (dayNum > 0) result[dayNum] = (value['status'] ?? 'A').toString().toUpperCase();
+          if (dayNum > 0)
+            result[dayNum] = (value['status'] ?? 'A').toString().toUpperCase();
         });
         _safeSetState(() => _calData = result);
       }
@@ -524,18 +552,26 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
   Color _calStatusColor(String? code, {bool isSunday = false}) {
     switch (code) {
-      case 'P':    return Colors.green.shade500;
-      case 'A':    return Colors.red.shade400;
-      case 'L':    return Colors.yellow.shade700;   // Leave = yellow
+      case 'P':
+        return Colors.green.shade500;
+      case 'A':
+        return Colors.red.shade400;
+      case 'L':
+        return Colors.yellow.shade700; // Leave = yellow
       case 'OT':
       case 'LT':
-      case 'LATE': return Colors.orange.shade500;   // Late/OT = orange
+      case 'LATE':
+        return Colors.orange.shade500; // Late/OT = orange
       case 'HD':
       case 'CO':
-      case 'COMPOFF': return Colors.orange.shade400; // Half Day / Comp Off = orange
-      case 'H':    return Colors.red.shade100;       // Holiday = same bg as Sunday
-      case 'WO':   return Colors.purple.shade200;
-      default:     return isSunday ? Colors.red.shade100 : Colors.transparent;
+      case 'COMPOFF':
+        return Colors.orange.shade400; // Half Day / Comp Off = orange
+      case 'H':
+        return Colors.red.shade100; // Holiday = same bg as Sunday
+      case 'WO':
+        return Colors.purple.shade200;
+      default:
+        return isSunday ? Colors.red.shade100 : Colors.transparent;
     }
   }
 
@@ -549,7 +585,10 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: Colors.black54),
+        ),
       ],
     );
   }
@@ -573,10 +612,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(fontSize: 10, color: color),
-            ),
+            Text(label, style: TextStyle(fontSize: 10, color: color)),
           ],
         ),
       ),
@@ -596,9 +632,10 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final presentCount = _calData.values.where((c) => c == 'P').length;
     final absentCount = _calData.values.where((c) => c == 'A').length;
     final leaveCount = _calData.values.where((c) => c == 'L').length;
-    final lateCount = _calData.values
-        .where((c) => c == 'OT' || c == 'LT' || c == 'LATE')
-        .length;
+    final lateCount =
+        _calData.values
+            .where((c) => c == 'OT' || c == 'LT' || c == 'LATE')
+            .length;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -682,138 +719,161 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Row(
               children: [
-                    ...[' Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
-                        .asMap()
-                        .entries
-                        .map(
-                          (e) => Expanded(
-                            child: Center(
-                              child: Text(
-                                e.value.trim(),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: e.key == 0
-                                      ? Colors.blueGrey.shade400
-                                      : Colors.black45,
-                                ),
-                              ),
-                            ),
-                          ),
+                ...[
+                  ' Su',
+                  'Mo',
+                  'Tu',
+                  'We',
+                  'Th',
+                  'Fr',
+                  'Sa',
+                ].asMap().entries.map(
+                  (e) => Expanded(
+                    child: Center(
+                      child: Text(
+                        e.value.trim(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              e.key == 0
+                                  ? Colors.blueGrey.shade400
+                                  : Colors.black45,
                         ),
-                  ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 4),
           // Calendar grid
           _calLoading
               ? const Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Center(child: CircularProgressIndicator()),
-                )
+                padding: EdgeInsets.all(20),
+                child: Center(child: CircularProgressIndicator()),
+              )
               : Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 7,
-                      mainAxisSpacing: 3,
-                      crossAxisSpacing: 2,
-                      childAspectRatio: 1,
-                    ),
-                    itemCount: totalCells,
-                    itemBuilder: (_, i) {
-                      final dayNum = i - firstWeekday + 1;
-                      if (dayNum <= 0 || dayNum > daysInMonth) {
-                        return const SizedBox();
-                      }
-                      final isToday = now.year == _calYear &&
-                          now.month == _calMonth &&
-                          now.day == dayNum;
-                      final isFuture = DateTime(
-                        _calYear,
-                        _calMonth,
-                        dayNum,
-                      ).isAfter(DateTime(now.year, now.month, now.day));
-                      final code = _calData[dayNum];
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7,
+                    mainAxisSpacing: 3,
+                    crossAxisSpacing: 2,
+                    childAspectRatio: 1,
+                  ),
+                  itemCount: totalCells,
+                  itemBuilder: (_, i) {
+                    final dayNum = i - firstWeekday + 1;
+                    if (dayNum <= 0 || dayNum > daysInMonth) {
+                      return const SizedBox();
+                    }
+                    final isToday =
+                        now.year == _calYear &&
+                        now.month == _calMonth &&
+                        now.day == dayNum;
+                    final isFuture = DateTime(
+                      _calYear,
+                      _calMonth,
+                      dayNum,
+                    ).isAfter(DateTime(now.year, now.month, now.day));
+                    final code = _calData[dayNum];
 
-                      // Company-aware Week Off / Sunday detection
-                      // VHS (company 2): week off is any day the API marks WO
-                      // Eltrive (others): column 0 = Sunday (auto-detected)
-                      final isVHS = _companyId == '2';
-                      final isWOByApi = code == 'WO';
-                      final isHoliday = code == 'H';
-                      final isEltriveSunday = !isVHS && (i % 7) == 0;
-                      final showWSymbol = isWOByApi && !isEltriveSunday; // VHS WO only
-                      final showHSymbol = isHoliday && !isEltriveSunday;        // Holiday on non-Sunday
-                      final showSSymbol = isEltriveSunday;                       // Sunday ALWAYS S
+                    // Company-aware Week Off / Sunday detection
+                    // VHS (company 2): week off is any day the API marks WO
+                    // Eltrive (others): column 0 = Sunday (auto-detected)
+                    final isWOByApi = code == 'WO';
+                    final isHoliday = code == 'H';
+                    final isEltriveSunday = !_isVHS && (i % 7) == 0; // Sunday light-red: Company 1 only
+                    final showWSymbol =
+                        isWOByApi && !isEltriveSunday; // VHS WO only
+                    final showHSymbol =
+                        isHoliday && !isEltriveSunday; // Holiday on non-Sunday
+                    final showSSymbol = isEltriveSunday; // Sunday ALWAYS S
 
-                      Color bg;
-                      if (isFuture) {
-                        bg = isEltriveSunday
-                            ? Colors.red.shade50
-                            : isWOByApi
-                                ? Colors.purple.shade50
-                                : isHoliday
-                                    ? Colors.red.shade50
-                                    : Colors.transparent;
-                      } else if (isEltriveSunday) {
-                        // Sunday is ALWAYS light-red — ignore API status (P/A/etc.)
-                        bg = Colors.red.shade100;
-                      } else {
-                        bg = _calStatusColor(code, isSunday: false);
-                      }
+                    Color bg;
+                    if (isFuture) {
+                      bg =
+                          isEltriveSunday
+                              ? Colors.red.shade50
+                              : isWOByApi
+                              ? Colors.purple.shade50
+                              : isHoliday
+                              ? Colors.red.shade50
+                              : Colors.transparent;
+                    } else if (isEltriveSunday) {
+                      // Sunday is ALWAYS light-red — ignore API status (P/A/etc.)
+                      bg = Colors.red.shade100;
+                    } else {
+                      bg = _calStatusColor(code, isSunday: false);
+                    }
 
-                      // Text colour based on background
-                      // Text colour: dark on light bg, white on dark bg
-                      Color textColor;
-                      if (isEltriveSunday) {
-                        textColor = Colors.red.shade700;
-                      } else if (isWOByApi) {
-                        textColor = Colors.purple.shade700;
-                      } else if (isHoliday || bg == Colors.red.shade100) {
-                        textColor = Colors.red.shade700;
-                      } else if (bg == Colors.yellow.shade700 ||
-                          bg == Colors.orange.shade400 ||
-                          bg == Colors.transparent) {
-                        textColor = Colors.black87;
-                      } else {
-                        textColor = Colors.white; // dark bg: green, red, blue, orange
-                      }
+                    // Text colour based on background
+                    // Text colour: dark on light bg, white on dark bg
+                    Color textColor;
+                    if (isEltriveSunday) {
+                      textColor = Colors.red.shade700;
+                    } else if (isWOByApi) {
+                      textColor = Colors.purple.shade700;
+                    } else if (isHoliday || bg == Colors.red.shade100) {
+                      textColor = Colors.red.shade700;
+                    } else if (bg == Colors.yellow.shade700 ||
+                        bg == Colors.orange.shade400 ||
+                        bg == Colors.transparent) {
+                      textColor = Colors.black87;
+                    } else {
+                      textColor =
+                          Colors.white; // dark bg: green, red, blue, orange
+                    }
 
-                      // Symbol to show: W=WeekOff, H=Holiday, S=Sunday, else null
-                      final symbol = showWSymbol ? 'W' : (showHSymbol ? 'H' : (showSSymbol ? 'S' : null));
+                    // Symbol to show: W=WeekOff, H=Holiday, S=Sunday, else null
+                    final symbol =
+                        showWSymbol
+                            ? 'W'
+                            : (showHSymbol ? 'H' : (showSSymbol ? 'S' : null));
 
-                      return GestureDetector(
-                        onTap: isFuture
-                            ? null
-                            : () {
-                                final tappedDate = DateTime(_calYear, _calMonth, dayNum);
+                    return GestureDetector(
+                      onTap:
+                          isFuture
+                              ? null
+                              : () {
+                                final tappedDate = DateTime(
+                                  _calYear,
+                                  _calMonth,
+                                  dayNum,
+                                );
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => AttendanceHistoryScreen(
-                                      empId: widget.empId,
-                                      authToken: widget.authToken,
-                                      empName: widget.empName,
-                                      initialDate: tappedDate,
-                                    ),
+                                    builder:
+                                        (_) => AttendanceHistoryScreen(
+                                          empId: widget.empId,
+                                          authToken: widget.authToken,
+                                          empName: widget.empName,
+                                          initialDate: tappedDate,
+                                        ),
                                   ),
                                 );
                               },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: bg,
-                            shape: BoxShape.circle,
-                            border: isToday
-                                ? Border.all(color: Colors.teal.shade700, width: 2)
-                                : null,
-                          ),
-                          child: symbol != null
-                              // Sunday or Week-Off: show only the letter (S or W)
-                              ? Center(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: bg,
+                          shape: BoxShape.circle,
+                          border:
+                              isToday
+                                  ? Border.all(
+                                    color: Colors.teal.shade700,
+                                    width: 2,
+                                  )
+                                  : null,
+                        ),
+                        child:
+                            symbol != null
+                                // Sunday or Week-Off: show only the letter (S or W)
+                                ? Center(
                                   child: Text(
                                     symbol,
                                     style: TextStyle(
@@ -823,7 +883,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                     ),
                                   ),
                                 )
-                              : Center(
+                                : Center(
                                   child: Text(
                                     '$dayNum',
                                     style: TextStyle(
@@ -833,11 +893,11 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                     ),
                                   ),
                                 ),
-                        ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
                 ),
+              ),
           // Legend
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
@@ -851,7 +911,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 _calLegendDot(Colors.orange.shade500, 'Late / OT'),
                 _calLegendDot(Colors.orange.shade400, 'Half Day / CO'),
                 _calLegendDot(Colors.red.shade100, 'Holiday (H)'),
-                if (_companyId == '2')
+                if (_isVHS)
                   _calLegendDot(Colors.purple.shade200, 'Week Off (W)')
                 else
                   _calLegendDot(Colors.red.shade100, 'Sunday (S)'),
@@ -862,21 +922,24 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       ),
     );
   }
+
   /// Returns the correct logo widget for the logged-in employee's company.
   /// - If the server provided a logo URL â†’ show it (network image).
   /// - Eltrive companies (ID 1 or 2) â†’ show Eltrive logo asset.
   /// - All other companies (VHS, etc.) â†’ show VHS logo asset.
   Widget _companyLogoWidget() {
     // company_id "1" = Eltrive, "2" = VHS hospital
-    final localAsset = _companyId == '2' ? 'assets/vhs_logo.png' : 'assets/eltrive_plan.png';
+    final localAsset =
+        _isVHS ? 'assets/vhs_logo.png' : 'assets/eltrive_plan.png';
 
     if (_companyLogoUrl.isNotEmpty) {
       return Image.network(
         _companyLogoUrl,
         height: 80,
         fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) =>
-            Image.asset(localAsset, height: 80, fit: BoxFit.contain),
+        errorBuilder:
+            (_, __, ___) =>
+                Image.asset(localAsset, height: 80, fit: BoxFit.contain),
       );
     }
     return Image.asset(localAsset, height: 80, fit: BoxFit.contain);
@@ -897,17 +960,20 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     );
     await flutterLocalNotificationsPlugin.initialize(settings);
 
-    const AndroidNotificationChannel foregroundChannel = AndroidNotificationChannel(
-      'attendance_foreground',
-      'Attendance Foreground Service',
-      description: 'Permanent notification for active attendance tracking',
-      importance: Importance.low,
-      playSound: false,
-      enableVibration: false,
-    );
+    const AndroidNotificationChannel foregroundChannel =
+        AndroidNotificationChannel(
+          'attendance_foreground',
+          'Attendance Foreground Service',
+          description: 'Permanent notification for active attendance tracking',
+          importance: Importance.low,
+          playSound: false,
+          enableVibration: false,
+        );
 
     await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(foregroundChannel);
 
     // Request notification permission (Android 13+)
@@ -956,7 +1022,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
   Future<bool> _checkInternetConnectivity() async {
     final connectivityResults = await Connectivity().checkConnectivity();
-    if (connectivityResults.isEmpty || connectivityResults.contains(ConnectivityResult.none)) {
+    if (connectivityResults.isEmpty ||
+        connectivityResults.contains(ConnectivityResult.none)) {
       return false;
     }
     try {
@@ -1002,12 +1069,17 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       await Workmanager().registerPeriodicTask(
         finalLocationTask,
         finalLocationTask,
-        frequency: const Duration(minutes: 15), // Android minimum reliable interval
-        initialDelay: const Duration(seconds: 30), // Start soon after check-in/kill
+        frequency: const Duration(
+          minutes: 15,
+        ), // Android minimum reliable interval
+        initialDelay: const Duration(
+          seconds: 30,
+        ), // Start soon after check-in/kill
         inputData: {
           'authToken': widget.authToken,
           'empId': widget.empId,
-          'shiftId': selectedShift ?? '', // â† FIX: Prevent null â†’ wrong type error
+          'shiftId':
+              selectedShift ?? '', // â† FIX: Prevent null â†’ wrong type error
           'deviceSerialNumber': widget.deviceSerialNumber,
         },
         constraints: Constraints(
@@ -1017,7 +1089,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         existingWorkPolicy: ExistingWorkPolicy.replace,
       );
 
-      debugPrint('Successfully scheduled Workmanager periodic task (every ~15 min)');
+      debugPrint(
+        'Successfully scheduled Workmanager periodic task (every ~15 min)',
+      );
     } catch (e) {
       debugPrint('Failed to schedule Workmanager task: $e');
       _handleError('Background location scheduling failed', e);
@@ -1027,6 +1101,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       await prefs.setBool('retry_final_location', true);
     }
   }
+
   Future<void> _requestBatteryOptimization() async {
     const String prefKeyShown = 'battery_prompt_shown_once';
     final prefs = await SharedPreferences.getInstance();
@@ -1049,30 +1124,35 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final granted = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Allow Background Location'),
-        content: const Text(
-          'To track your attendance accurately even when the app is closed or minimized, please allow this app to run in the background without battery restrictions. Tap Allow on the next screen.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Skip'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Allow Background Location'),
+            content: const Text(
+              'To track your attendance accurately even when the app is closed or minimized, please allow this app to run in the background without battery restrictions. Tap Allow on the next screen.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Skip'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Allow'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Allow'),
-          ),
-        ],
-      ),
     );
 
     if (granted == true) {
       await Permission.ignoreBatteryOptimizations.request();
     }
-  }  void _autoSelectShift() {
+  }
+
+  void _autoSelectShift() {
     if (selectedShift != null && selectedShift!.isNotEmpty) {
-      debugPrint('Auto-select: Shift already selected ($selectedShift), preserving user manual selection.');
+      debugPrint(
+        'Auto-select: Shift already selected ($selectedShift), preserving user manual selection.',
+      );
       return;
     }
 
@@ -1090,7 +1170,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     } else if (hour >= 8 && hour < 14) {
       bool hasGeneral = empShifts.any((s) {
         final name = s['name'].toString().toLowerCase();
-        return name.contains('general') || name.contains('gen') || name.contains('day');
+        return name.contains('general') ||
+            name.contains('gen') ||
+            name.contains('day');
       });
       targetShiftType = hasGeneral ? 'General' : 'A';
     } else if (hour >= 14 && hour < 22) {
@@ -1103,16 +1185,34 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
     for (var shift in empShifts) {
       final name = shift['name'].toString().toLowerCase();
-      if (targetShiftType == 'General' && (name.contains('general') || name.contains('gen') || name.contains('day'))) {
+      if (targetShiftType == 'General' &&
+          (name.contains('general') ||
+              name.contains('gen') ||
+              name.contains('day'))) {
         matchedShift = shift;
         break;
-      } else if (targetShiftType == 'A' && (name.contains('shift a') || name.contains('a shift') || name.startsWith('a ') || name.contains(': a') || name.contains(' a '))) {
+      } else if (targetShiftType == 'A' &&
+          (name.contains('shift a') ||
+              name.contains('a shift') ||
+              name.startsWith('a ') ||
+              name.contains(': a') ||
+              name.contains(' a '))) {
         matchedShift = shift;
         break;
-      } else if (targetShiftType == 'B' && (name.contains('shift b') || name.contains('b shift') || name.startsWith('b ') || name.contains(': b') || name.contains(' b '))) {
+      } else if (targetShiftType == 'B' &&
+          (name.contains('shift b') ||
+              name.contains('b shift') ||
+              name.startsWith('b ') ||
+              name.contains(': b') ||
+              name.contains(' b '))) {
         matchedShift = shift;
         break;
-      } else if (targetShiftType == 'C' && (name.contains('shift c') || name.contains('c shift') || name.startsWith('c ') || name.contains(': c') || name.contains(' c '))) {
+      } else if (targetShiftType == 'C' &&
+          (name.contains('shift c') ||
+              name.contains('c shift') ||
+              name.startsWith('c ') ||
+              name.contains(': c') ||
+              name.contains(' c '))) {
         matchedShift = shift;
         break;
       }
@@ -1139,10 +1239,20 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     _safeSetState(() {
       selectedShift = matchedShift!['id'];
     });
-    debugPrint('Auto-detected and selected shift: ${matchedShift['name']} (ID: $selectedShift)');
+    debugPrint(
+      'Auto-detected and selected shift: ${matchedShift['name']} (ID: $selectedShift)',
+    );
   }
 
-  Future<void> _loadShiftsAsync() async {
+  Future<void> _loadShiftsAsync({bool force = false}) async {
+    // Prevent repeated auto-triggers within 2 minutes
+    if (!force) {
+      final now = DateTime.now();
+      if (_lastAutoRefresh != null && now.difference(_lastAutoRefresh!).inSeconds < 120) {
+        return;
+      }
+    }
+    _lastAutoRefresh = DateTime.now();
     try {
       _safeSetState(() => isShiftsLoading = true);
       await _initializeApp();
@@ -1176,21 +1286,28 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
   Future<void> _checkAppUpdate() async {
     try {
-      final response = await http.get(Uri.parse('https://hrm.eltrive.com/api/app-version')).timeout(const Duration(seconds: 4));
+      final response = await http
+          .get(Uri.parse('https://hrm.eltrive.com/api/app-version'))
+          .timeout(const Duration(seconds: 4));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final latestVersion = int.tryParse(data['latest_version_code']?.toString() ?? '') ?? 0;
+        final latestVersion =
+            int.tryParse(data['latest_version_code']?.toString() ?? '') ?? 0;
         final forceUpdate = data['force_update'] as bool? ?? false;
-        final storeUrl = data['play_store_url']?.toString() ?? 'https://play.google.com/store/apps/details?id=com.ELT_EMP.as_f';
-        
-        const int localAppVersionCode = 10;
-        
+        final storeUrl =
+            data['play_store_url']?.toString() ??
+            'https://play.google.com/store/apps/details?id=com.ELT_EMP.as_f';
+
+        const int localAppVersionCode = 12;
+
         if (latestVersion > localAppVersionCode && forceUpdate) {
           _showForcedUpdateDialog(storeUrl);
         }
       }
     } catch (e) {
-      debugPrint('Update check bypassed: $e'); // Fails silently to prevent locking users out if endpoint isn't ready
+      debugPrint(
+        'Update check bypassed: $e',
+      ); // Fails silently to prevent locking users out if endpoint isn't ready
     }
   }
 
@@ -1208,14 +1325,15 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             ),
             title: Row(
               children: [
-                Icon(Icons.system_update_rounded, color: Colors.teal.shade700, size: 28),
+                Icon(
+                  Icons.system_update_rounded,
+                  color: Colors.teal.shade700,
+                  size: 28,
+                ),
                 const SizedBox(width: 10),
                 const Text(
                   'Update Required',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
                 ),
               ],
             ),
@@ -1236,15 +1354,23 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    icon: const Icon(Icons.shopping_bag_rounded), // Generic shopping/store bag icon
+                    icon: const Icon(
+                      Icons.shopping_bag_rounded,
+                    ), // Generic shopping/store bag icon
                     label: const Text(
                       'UPDATE NOW',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                     onPressed: () async {
                       final url = Uri.parse(storeUrl);
                       if (await canLaunchUrl(url)) {
-                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                        await launchUrl(
+                          url,
+                          mode: LaunchMode.externalApplication,
+                        );
                       }
                     },
                   ),
@@ -1281,7 +1407,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     if (storedEmpId != widget.empId) {
       final savedLogo = prefs.getString('companyLogo') ?? '';
       final savedRole = prefs.getString('userRole') ?? '';
-      final savedFcm  = prefs.getString('fcm_token') ?? '';
+      final savedFcm = prefs.getString('fcm_token') ?? '';
       final savedIsAdmin = prefs.getBool('isAdminUser') ?? false;
       await prefs.clear();
       await prefs.setString(_prefKeyEmpId, widget.empId);
@@ -1290,7 +1416,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       await prefs.setString('deviceSerialNumber', widget.deviceSerialNumber);
       if (savedLogo.isNotEmpty) await prefs.setString('companyLogo', savedLogo);
       if (savedRole.isNotEmpty) await prefs.setString('userRole', savedRole);
-      if (savedFcm.isNotEmpty)  await prefs.setString('fcm_token', savedFcm);
+      if (savedFcm.isNotEmpty) await prefs.setString('fcm_token', savedFcm);
       if (savedIsAdmin) await prefs.setBool('isAdminUser', true);
       debugPrint('Cleared SharedPreferences for new empId: ${widget.empId}');
       isCheckedIn = false;
@@ -1305,7 +1431,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     } else {
       if (lastOpenedDate != todayStr) {
         // It's a new day! Reset yesterday's stored times
-        debugPrint('New day detected ($todayStr != $lastOpenedDate). Resetting daily check-in/out state.');
+        debugPrint(
+          'New day detected ($todayStr != $lastOpenedDate). Resetting daily check-in/out state.',
+        );
         await prefs.setString('last_opened_date', todayStr);
         await prefs.setBool(_prefKeyCheckedIn, false);
         await prefs.setString(_prefKeyWorkingDuration, '00:00:00');
@@ -1345,7 +1473,12 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final userRole = prefs.getString('userRole') ?? '';
     final savedIsAdmin = prefs.getBool('isAdminUser') ?? false;
     _safeSetState(() {
-      isAdminUser = widget.isAdmin || userRole == 'admin' || widget.empId == '0' || widget.empId == 'admin' || savedIsAdmin;
+      isAdminUser =
+          widget.isAdmin ||
+          userRole == 'admin' ||
+          widget.empId == '0' ||
+          widget.empId == 'admin' ||
+          savedIsAdmin;
     });
     debugPrint('DEBUG ADMIN CHECK END:');
     debugPrint('  - calculated isAdminUser: $isAdminUser');
@@ -1470,12 +1603,15 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             await _saveState();
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Auto-Checkout triggered by server')),
+                const SnackBar(
+                  content: Text('Auto-Checkout triggered by server'),
+                ),
               );
             }
             await _showNotification(
               title: 'Auto Checkout',
-              body: 'Server triggered auto-checkout. Total: ${data['cumulative_working_hours']}',
+              body:
+                  'Server triggered auto-checkout. Total: ${data['cumulative_working_hours']}',
             );
           }
 
@@ -1492,7 +1628,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           // approved zone; the backend decides whether to allow check-in.
           final fenceDistance = (data['distance_from_fence'] ?? 0).toDouble();
           if (fenceDistance > 500) {
-            debugPrint('Employee is ${fenceDistance.toStringAsFixed(0)}m from approved location.');
+            debugPrint(
+              'Employee is ${fenceDistance.toStringAsFixed(0)}m from approved location.',
+            );
           }
         }
         return data; // Return data for background handling
@@ -1534,7 +1672,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     if (!await Permission.locationAlways.isGranted) {
       final status = await Permission.locationAlways.request();
       if (!status.isGranted) {
-        debugPrint('Background location permission denied - continuing in foreground mode silently');
+        debugPrint(
+          'Background location permission denied - continuing in foreground mode silently',
+        );
       }
     }
 
@@ -1542,18 +1682,17 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
-        isForegroundMode: true,                    // â† important
+        isForegroundMode: true, // â† important
         autoStart: true,
         autoStartOnBoot: true,
         notificationChannelId: 'attendance_foreground', // new channel
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Persistent notification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         initialNotificationTitle: 'Attendance Active',
-        initialNotificationContent: 'Location is being tracked for check-in / check-out',
+        initialNotificationContent:
+            'Location is being tracked for check-in / check-out',
         // Show this notification permanently while checked-in
         foregroundServiceNotificationId: 1001,
-        foregroundServiceTypes: [
-          AndroidForegroundType.location,
-        ],
+        foregroundServiceTypes: [AndroidForegroundType.location],
       ),
       iosConfiguration: IosConfiguration(
         autoStart: true,
@@ -1660,7 +1799,6 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     locationSendTimer = null;
   }
 
-
   Future<Position> _getCurrentLocation() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) throw Exception('Location services are disabled.');
@@ -1726,9 +1864,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                   _isNoInternetDialogShowing = false;
                   if (await _checkInternetConnectivity()) {
                     _safeSetState(() => _isConnected = true);
-                    await fetchShifts();
-                    await fetchStatus();
-                    await _syncPendingLocations();
+                    await _loadShiftsAsync(force: true);
                   } else {
                     _showNoInternetDialog();
                   }
@@ -1746,41 +1882,90 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
   void _populateDefaultShifts() {
     final nowForDefaults = DateTime.now();
-    final defaultsDateStr = '${nowForDefaults.year}-${nowForDefaults.month.toString().padLeft(2, '0')}-${nowForDefaults.day.toString().padLeft(2, '0')}';
-    
+    final defaultsDateStr =
+        '${nowForDefaults.year}-${nowForDefaults.month.toString().padLeft(2, '0')}-${nowForDefaults.day.toString().padLeft(2, '0')}';
+
     final List<Map<String, dynamic>> defaultShifts = [
       {
         'id': '1',
         'name': 'General Shift : 09:00 AM - 05:00 PM',
-        'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 9, 0),
-        'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 17, 0),
+        'startTime': DateTime(
+          nowForDefaults.year,
+          nowForDefaults.month,
+          nowForDefaults.day,
+          9,
+          0,
+        ),
+        'endTime': DateTime(
+          nowForDefaults.year,
+          nowForDefaults.month,
+          nowForDefaults.day,
+          17,
+          0,
+        ),
         'isActive': true,
         'date': defaultsDateStr,
       },
       {
         'id': '2',
         'name': 'A Shift : 06:00 AM - 02:00 PM',
-        'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 6, 0),
-        'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 14, 0),
+        'startTime': DateTime(
+          nowForDefaults.year,
+          nowForDefaults.month,
+          nowForDefaults.day,
+          6,
+          0,
+        ),
+        'endTime': DateTime(
+          nowForDefaults.year,
+          nowForDefaults.month,
+          nowForDefaults.day,
+          14,
+          0,
+        ),
         'isActive': true,
         'date': defaultsDateStr,
       },
       {
         'id': '3',
         'name': 'B Shift : 02:00 PM - 10:00 PM',
-        'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 14, 0),
-        'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 22, 0),
+        'startTime': DateTime(
+          nowForDefaults.year,
+          nowForDefaults.month,
+          nowForDefaults.day,
+          14,
+          0,
+        ),
+        'endTime': DateTime(
+          nowForDefaults.year,
+          nowForDefaults.month,
+          nowForDefaults.day,
+          22,
+          0,
+        ),
         'isActive': true,
         'date': defaultsDateStr,
       },
       {
         'id': '4',
         'name': 'C Shift : 10:00 PM - 06:00 AM',
-        'startTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 22, 0),
-        'endTime': DateTime(nowForDefaults.year, nowForDefaults.month, nowForDefaults.day, 6, 0).add(const Duration(days: 1)),
+        'startTime': DateTime(
+          nowForDefaults.year,
+          nowForDefaults.month,
+          nowForDefaults.day,
+          22,
+          0,
+        ),
+        'endTime': DateTime(
+          nowForDefaults.year,
+          nowForDefaults.month,
+          nowForDefaults.day,
+          6,
+          0,
+        ).add(const Duration(days: 1)),
         'isActive': true,
         'date': defaultsDateStr,
-      }
+      },
     ];
 
     _safeSetState(() {
@@ -1878,9 +2063,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                       ? startHour - 12
                       : (startHour == 0 ? 12 : startHour);
               final end12 =
-                  endHour > 12
-                      ? endHour - 12
-                      : (endHour == 0 ? 12 : endHour);
+                  endHour > 12 ? endHour - 12 : (endHour == 0 ? 12 : endHour);
               final overnight = endTime.day != startTime.day;
               displayTime =
                   '$start12:${startMin.toString().padLeft(2, '0')} $startPeriod - '
@@ -1963,9 +2146,10 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         final shiftTime = data['shift_time']?.toString() ?? '-';
         final shiftId = data['shift_id']?.toString() ?? '';
         final shiftNameRaw = data['shift_name']?.toString() ?? '';
-        final shiftName = shiftNameRaw.trim().toLowerCase() == 'open shift'
-            ? 'General Shift'
-            : shiftNameRaw;
+        final shiftName =
+            shiftNameRaw.trim().toLowerCase() == 'open shift'
+                ? 'General Shift'
+                : shiftNameRaw;
         final now = tz.TZDateTime.now(tz.getLocation('Asia/Kolkata'));
         final today = DateTime(now.year, now.month, now.day);
         String shiftDateStr =
@@ -2015,7 +2199,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           isAllowedToCheckIn = !isCheckedIn;
           isAllowedToCheckOut = isCheckedIn;
           isShiftSelectable = true;
-          selectedShift = isCheckedIn ? shiftId : null;
+          // Only set shift from status API when checked in; when not checked in,
+          // preserve whatever fetchShifts already selected
+          if (isCheckedIn) selectedShift = shiftId;
           workingDuration = _parseDuration(
             data['cumulative_working_hours'] ?? '00:00:00',
           );
@@ -2109,10 +2295,16 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     if (!confirmed) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Check-in cancelled.'), duration: Duration(seconds: 2)),
+          const SnackBar(
+            content: Text('Check-in cancelled.'),
+            duration: Duration(seconds: 2),
+          ),
         );
       }
-      await _showNotification(title: 'Cancelled', body: 'Check-in cancelled by you.');
+      await _showNotification(
+        title: 'Cancelled',
+        body: 'Check-in cancelled by you.',
+      );
       return;
     }
 
@@ -2122,23 +2314,32 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            title: const Text('Location Required'),
-            content: const Text('Please enable location services to check in.'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await _openLocationSettings();
-                },
-                child: const Text('Open Settings'),
+          builder:
+              (_) => AlertDialog(
+                title: const Text('Location Required'),
+                content: const Text(
+                  'Please enable location services to check in.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await _openLocationSettings();
+                    },
+                    child: const Text('Open Settings'),
+                  ),
+                ],
               ),
-            ],
-          ),
         );
       }
-      await _showNotification(title: 'Location Off', body: 'Enable location to check in.');
+      await _showNotification(
+        title: 'Location Off',
+        body: 'Enable location to check in.',
+      );
       return;
     }
 
@@ -2152,7 +2353,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       final position = await _getCurrentLocation();
 
       // â”€â”€ Late check-in detection (hospital/VHS accounts only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      if (_isHospitalAccount) {
+      if (_isVHS) {
         await _checkAndHandleLateCheckIn();
         if (!mounted) return;
       }
@@ -2178,7 +2379,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         workingDuration = _parseDuration(cumTimeStr);
         sessionStart = DateTime.now();
         checkInTime = DateFormat('hh:mm:ss a').format(sessionStart!);
-        _safeSetState(() => totalWorkingHours = _formatDuration(workingDuration));
+        _safeSetState(
+          () => totalWorkingHours = _formatDuration(workingDuration),
+        );
 
         await _saveState();
 
@@ -2198,7 +2401,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         });
 
         // Show outside boundary warning if applicable
-        final fenceDistance = double.tryParse(data['distance_from_fence']?.toString() ?? '') ?? 0.0;
+        final fenceDistance =
+            double.tryParse(data['distance_from_fence']?.toString() ?? '') ??
+            0.0;
         if (fenceDistance > 0) {
           _showOutsideBoundaryDialog(true);
         }
@@ -2214,7 +2419,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         }
         await _showNotification(
           title: 'Check-In Success',
-          body: '${data['message'] ?? 'Checked in at $checkInTime'} - Shift: $selectedShift',
+          body:
+              '${data['message'] ?? 'Checked in at $checkInTime'} - Shift: $selectedShift',
         );
 
         // VERY IMPORTANT: Ask user to disable battery optimization
@@ -2223,27 +2429,28 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
             showDialog(
               context: context,
               barrierDismissible: false,
-              builder: (ctx) => AlertDialog(
-                title: const Text("Important for Accurate Attendance"),
-                content: const Text(
-                  "To make sure your attendance is recorded even when the app is closed:\n\n"
+              builder:
+                  (ctx) => AlertDialog(
+                    title: const Text("Important for Accurate Attendance"),
+                    content: const Text(
+                      "To make sure your attendance is recorded even when the app is closed:\n\n"
                       "â†’ Go to Settings â†’ Apps â†’ This App â†’ Battery â†’ Choose 'Unrestricted' or 'No restrictions'\n\n"
                       "Without this, Android may stop tracking when app is closed.",
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () async {
-                      await Permission.ignoreBatteryOptimizations.request();
-                      if (ctx.mounted) Navigator.pop(ctx);
-                    },
-                    child: const Text("Open Settings Now"),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () async {
+                          await Permission.ignoreBatteryOptimizations.request();
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        },
+                        child: const Text("Open Settings Now"),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text("Later"),
+                      ),
+                    ],
                   ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text("Later"),
-                  ),
-                ],
-              ),
             );
           }
         }
@@ -2252,16 +2459,28 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['message'] ?? 'Check-In Failed'), duration: const Duration(seconds: 3)),
+            SnackBar(
+              content: Text(data['message'] ?? 'Check-In Failed'),
+              duration: const Duration(seconds: 3),
+            ),
           );
         }
-        _handleError('Check-In Failed', Exception(data['message'] ?? 'Unknown error'));
-        await _showNotification(title: 'Check-In Failed', body: data['message'] ?? 'Try again later.');
+        _handleError(
+          'Check-In Failed',
+          Exception(data['message'] ?? 'Unknown error'),
+        );
+        await _showNotification(
+          title: 'Check-In Failed',
+          body: data['message'] ?? 'Try again later.',
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Check-In Error: $e'), duration: const Duration(seconds: 3)),
+          SnackBar(
+            content: Text('Check-In Error: $e'),
+            duration: const Duration(seconds: 3),
+          ),
         );
       }
       _handleError('Check-In Error', e);
@@ -2288,13 +2507,19 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
     if (isProcessingCheckOut) {
       _handleError('Checkout in progress', Exception('Already processing'));
-      await _showNotification(title: 'In Progress', body: 'Checkout already running. Wait.');
+      await _showNotification(
+        title: 'In Progress',
+        body: 'Checkout already running. Wait.',
+      );
       return;
     }
 
     if (selectedShift == null) {
       _handleError('No shift', Exception('No shift selected'));
-      await _showNotification(title: 'No Shift', body: 'Select shift before checkout.');
+      await _showNotification(
+        title: 'No Shift',
+        body: 'Select shift before checkout.',
+      );
       return;
     }
 
@@ -2305,10 +2530,16 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     if (!confirmed) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Check-out cancelled.'), duration: Duration(seconds: 2)),
+          const SnackBar(
+            content: Text('Check-out cancelled.'),
+            duration: Duration(seconds: 2),
+          ),
         );
       }
-      await _showNotification(title: 'Cancelled', body: 'Check-out cancelled by you.');
+      await _showNotification(
+        title: 'Cancelled',
+        body: 'Check-out cancelled by you.',
+      );
       return;
     }
 
@@ -2318,23 +2549,32 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            title: const Text('Location Required'),
-            content: const Text('Please enable location services to check out.'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await _openLocationSettings();
-                },
-                child: const Text('Open Settings'),
+          builder:
+              (_) => AlertDialog(
+                title: const Text('Location Required'),
+                content: const Text(
+                  'Please enable location services to check out.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await _openLocationSettings();
+                    },
+                    child: const Text('Open Settings'),
+                  ),
+                ],
               ),
-            ],
-          ),
         );
       }
-      await _showNotification(title: 'Location Off', body: 'Enable location to check out.');
+      await _showNotification(
+        title: 'Location Off',
+        body: 'Enable location to check out.',
+      );
       return;
     }
 
@@ -2370,7 +2610,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         final cumTimeStr = data['cumulative_working_hours'] ?? '00:00:00';
         workingDuration = _parseDuration(cumTimeStr);
 
-        _safeSetState(() => totalWorkingHours = _formatDuration(workingDuration));
+        _safeSetState(
+          () => totalWorkingHours = _formatDuration(workingDuration),
+        );
 
         await _saveState();
 
@@ -2382,7 +2624,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         // STOP FOREGROUND SERVICE CORRECTLY (no await needed)
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         final service = FlutterBackgroundService();
-        service.invoke('stop');  // â† No await here
+        service.invoke('stop'); // â† No await here
         debugPrint('Foreground service stop requested');
 
         // Update background state
@@ -2395,7 +2637,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         });
 
         // Show outside boundary warning if applicable
-        final fenceDistance = double.tryParse(data['distance_from_fence']?.toString() ?? '') ?? 0.0;
+        final fenceDistance =
+            double.tryParse(data['distance_from_fence']?.toString() ?? '') ??
+            0.0;
         if (fenceDistance > 0) {
           _showOutsideBoundaryDialog(false);
         }
@@ -2410,7 +2654,8 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         }
         await _showNotification(
           title: 'Check-Out Success',
-          body: '${data['message'] ?? 'Checked out at $checkOutTime'}. Total: $totalWorkingHours',
+          body:
+              '${data['message'] ?? 'Checked out at $checkOutTime'}. Total: $totalWorkingHours',
         );
 
         // Do not clear SharedPreferences or navigate to Login Screen on successful checkout,
@@ -2421,17 +2666,29 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         await fetchStatus();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['message'] ?? 'Check-Out Failed'), duration: const Duration(seconds: 3)),
+            SnackBar(
+              content: Text(data['message'] ?? 'Check-Out Failed'),
+              duration: const Duration(seconds: 3),
+            ),
           );
         }
-        _handleError('Check-Out Failed', Exception(data['message'] ?? 'Unknown'));
-        await _showNotification(title: 'Check-Out Failed', body: data['message'] ?? 'Try again.');
+        _handleError(
+          'Check-Out Failed',
+          Exception(data['message'] ?? 'Unknown'),
+        );
+        await _showNotification(
+          title: 'Check-Out Failed',
+          body: data['message'] ?? 'Try again.',
+        );
       }
     } catch (e) {
       await fetchStatus();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Check-Out Error: $e'), duration: const Duration(seconds: 3)),
+          SnackBar(
+            content: Text('Check-Out Error: $e'),
+            duration: const Duration(seconds: 3),
+          ),
         );
       }
       _handleError('Check-Out Error', e);
@@ -2503,30 +2760,44 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     if (!mounted) return;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: const [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-            SizedBox(width: 8),
-            Text("Outside Boundary", style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Text(
-          "You are outside the approved location boundary. Your ${isCheckIn ? 'check-in' : 'check-out'} has been recorded successfully, but is flagged as outside the premises.",
-          style: const TextStyle(fontSize: 16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("OK", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: const [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.orange,
+                  size: 28,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  "Outside Boundary",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            content: Text(
+              "You are outside the approved location boundary. Your ${isCheckIn ? 'check-in' : 'check-out'} has been recorded successfully, but is flagged as outside the premises.",
+              style: const TextStyle(fontSize: 16),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text(
+                  "OK",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
-
-
 
   Future<void> _openLocationSettings() async {
     await Geolocator.openLocationSettings();
@@ -2555,14 +2826,24 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                   // Preserve login credentials so silent re-login works next time
                   final savedUserId = prefs.getString('savedUserId') ?? '';
                   final savedPassword = prefs.getString('savedPassword') ?? '';
-                  final savedDeviceSerial = prefs.getString('deviceSerialNumber') ?? '';
+                  final savedDeviceSerial =
+                      prefs.getString('deviceSerialNumber') ?? '';
                   final savedFcm = prefs.getString('fcm_token') ?? '';
                   await prefs.clear();
-                  if (savedUserId.isNotEmpty) await prefs.setString('savedUserId', savedUserId);
-                  if (savedPassword.isNotEmpty) await prefs.setString('savedPassword', savedPassword);
-                  if (savedDeviceSerial.isNotEmpty) await prefs.setString('deviceSerialNumber', savedDeviceSerial);
-                  if (savedFcm.isNotEmpty) await prefs.setString('fcm_token', savedFcm);
-                  debugPrint('Session reset â€” credentials preserved for silent login');
+                  if (savedUserId.isNotEmpty)
+                    await prefs.setString('savedUserId', savedUserId);
+                  if (savedPassword.isNotEmpty)
+                    await prefs.setString('savedPassword', savedPassword);
+                  if (savedDeviceSerial.isNotEmpty)
+                    await prefs.setString(
+                      'deviceSerialNumber',
+                      savedDeviceSerial,
+                    );
+                  if (savedFcm.isNotEmpty)
+                    await prefs.setString('fcm_token', savedFcm);
+                  debugPrint(
+                    'Session reset â€” credentials preserved for silent login',
+                  );
                   _isSessionDialogShowing = false;
                   if (context.mounted) {
                     Navigator.pushReplacement(
@@ -2651,25 +2932,26 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: const Text(
-            'Check-In Reminder',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: const Text(
-            "It's 9:15 AM! Don't forget to check in to record your attendance.",
-            style: TextStyle(fontSize: 16),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text(
-                'OK',
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text(
+                'Check-In Reminder',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
+              content: const Text(
+                "It's 9:15 AM! Don't forget to check in to record your attendance.",
+                style: TextStyle(fontSize: 16),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text(
+                    'OK',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
       );
     }
   }
@@ -2729,52 +3011,65 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     final submitted = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Row(
-          children: [
-            Icon(Icons.schedule_rounded, color: Colors.orange.shade700),
-            const SizedBox(width: 8),
-            const Text('Late Check-In', style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'You are checking in ${lateBy.inMinutes} minute(s) late. '
-              'Please provide a reason for manager approval.',
-              style: const TextStyle(fontSize: 14),
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: reasonController,
-              maxLines: 3,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Reason for late check-in...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.all(12),
+            title: Row(
+              children: [
+                Icon(Icons.schedule_rounded, color: Colors.orange.shade700),
+                const SizedBox(width: 8),
+                const Text(
+                  'Late Check-In',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You are checking in ${lateBy.inMinutes} minute(s) late. '
+                  'Please provide a reason for manager approval.',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: reasonController,
+                  maxLines: 3,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Reason for late check-in...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Skip'),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Skip'),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange.shade700,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text(
+                  'Submit',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange.shade700,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Submit', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
     );
 
     if (submitted == true && reasonController.text.trim().isNotEmpty) {
@@ -2785,12 +3080,15 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           requestType: 'late_checkin',
           date: DateFormat('yyyy-MM-dd').format(now),
           reason: reasonController.text.trim(),
-          duration: '${lateBy.inHours.toString().padLeft(2, '0')}:${(lateBy.inMinutes % 60).toString().padLeft(2, '0')}',
+          duration:
+              '${lateBy.inHours.toString().padLeft(2, '0')}:${(lateBy.inMinutes % 60).toString().padLeft(2, '0')}',
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Late check-in request submitted for manager approval.'),
+              content: Text(
+                'Late check-in request submitted for manager approval.',
+              ),
               backgroundColor: Colors.orange,
               behavior: SnackBarBehavior.floating,
             ),
@@ -2838,7 +3136,11 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                 ),
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded, size: 13, color: color.withValues(alpha: 0.6)),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 13,
+              color: color.withValues(alpha: 0.6),
+            ),
           ],
         ),
       ),
@@ -2869,48 +3171,113 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
           });
         },
         type: BottomNavigationBarType.fixed,
-        items: [
-          BottomNavigationBarItem(
-            icon: ImageIcon(
-              AssetImage('assets/attndance_logo.png'),
-              size: 24,
-              color: _selectedIndex == 0 ? Colors.greenAccent : Colors.black54,
-            ),
-            label: 'Attendance',
-          ),
-          BottomNavigationBarItem(
-            icon: ImageIcon(
-              AssetImage('assets/leave_logo.png'),
-              size: 24,
-              color: _selectedIndex == 1 ? Colors.greenAccent : Colors.black54,
-            ),
-            label: 'Leaves',
-          ),
-          BottomNavigationBarItem(
-            icon: ImageIcon(
-              AssetImage('assets/payslip_icon.png'),
-              size: 24,
-              color: _selectedIndex == 2 ? Colors.greenAccent : Colors.black54,
-            ),
-            label: 'Tasks',
-          ),
-          BottomNavigationBarItem(
-            icon: ImageIcon(
-              AssetImage('assets/approval_logos.png'),
-              size: 24,
-              color: _selectedIndex == 3 ? Colors.greenAccent : Colors.black54,
-            ),
-            label: 'Expenses',
-          ),
-          BottomNavigationBarItem(
-            icon: ImageIcon(
-              AssetImage('assets/up_more.png'),
-              size: 24,
-              color: _selectedIndex == 4 ? Colors.greenAccent : Colors.black54,
-            ),
-            label: 'More',
-          ),
-        ],
+        items:
+            _isVHS
+                // VHS: 4 tabs — no Tasks
+                ? [
+                  BottomNavigationBarItem(
+                    icon: ImageIcon(
+                      AssetImage('assets/attndance_logo.png'),
+                      size: 24,
+                      color:
+                          _selectedIndex == 0
+                              ? Colors.greenAccent
+                              : Colors.black54,
+                    ),
+                    label: 'Attendance',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: ImageIcon(
+                      AssetImage('assets/leave_logo.png'),
+                      size: 24,
+                      color:
+                          _selectedIndex == 1
+                              ? Colors.greenAccent
+                              : Colors.black54,
+                    ),
+                    label: 'Leaves',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: ImageIcon(
+                      AssetImage('assets/approval_logos.png'),
+                      size: 24,
+                      color:
+                          _selectedIndex == 2
+                              ? Colors.greenAccent
+                              : Colors.black54,
+                    ),
+                    label: 'Expenses',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: ImageIcon(
+                      AssetImage('assets/up_more.png'),
+                      size: 24,
+                      color:
+                          _selectedIndex == 3
+                              ? Colors.greenAccent
+                              : Colors.black54,
+                    ),
+                    label: 'More',
+                  ),
+                ]
+                // Eltrive & others: 5 tabs
+                : [
+                  BottomNavigationBarItem(
+                    icon: ImageIcon(
+                      AssetImage('assets/attndance_logo.png'),
+                      size: 24,
+                      color:
+                          _selectedIndex == 0
+                              ? Colors.greenAccent
+                              : Colors.black54,
+                    ),
+                    label: 'Attendance',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: ImageIcon(
+                      AssetImage('assets/leave_logo.png'),
+                      size: 24,
+                      color:
+                          _selectedIndex == 1
+                              ? Colors.greenAccent
+                              : Colors.black54,
+                    ),
+                    label: 'Leaves',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: ImageIcon(
+                      AssetImage('assets/payslip_icon.png'),
+                      size: 24,
+                      color:
+                          _selectedIndex == 2
+                              ? Colors.greenAccent
+                              : Colors.black54,
+                    ),
+                    label: 'Tasks',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: ImageIcon(
+                      AssetImage('assets/approval_logos.png'),
+                      size: 24,
+                      color:
+                          _selectedIndex == 3
+                              ? Colors.greenAccent
+                              : Colors.black54,
+                    ),
+                    label: 'Expenses',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: ImageIcon(
+                      AssetImage('assets/up_more.png'),
+                      size: 24,
+                      color:
+                          _selectedIndex == 4
+                              ? Colors.greenAccent
+                              : Colors.black54,
+                    ),
+                    label: 'More',
+                  ),
+                ],
       ),
       body: _getBodyWidget(_selectedIndex, today),
     );
@@ -2925,480 +3292,618 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         return SafeArea(
           bottom: false,
           child: Column(
-          children: [
-            // Fixed header — stays visible while body scrolls
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: SizedBox(
-                height: 68,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    if (isAdminUser)
+            children: [
+              // Fixed header — stays visible while body scrolls
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: SizedBox(
+                  height: 68,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (isAdminUser)
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.dashboard_rounded,
+                                size: 30,
+                                color: Colors.teal,
+                              ),
+                              tooltip: 'Admin Dashboard',
+                              onPressed: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder:
+                                        (_) => AdminPage(
+                                          empName: widget.empName,
+                                          companyId: widget.companyId,
+                                        ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      Center(child: _companyLogoWidget()),
                       Positioned(
-                        left: 0,
+                        right: 0,
                         top: 0,
                         bottom: 0,
                         child: Center(
                           child: IconButton(
                             icon: const Icon(
-                              Icons.dashboard_rounded,
+                              Icons.menu,
                               size: 30,
-                              color: Colors.teal,
+                              color: Colors.black87,
                             ),
-                            tooltip: 'Admin Dashboard',
                             onPressed: () {
-                              Navigator.pushReplacement(
+                              Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => AdminPage(
-                                    empName: widget.empName,
-                                    companyId: widget.companyId,
-                                  ),
+                                  builder:
+                                      (_) => EmpProfile(
+                                        empId: widget.empId,
+                                        empName: widget.empName,
+                                        authToken: widget.authToken,
+                                      ),
                                 ),
                               );
                             },
                           ),
                         ),
                       ),
-                    Center(child: _companyLogoWidget()),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: Center(
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.menu,
-                            size: 30,
-                            color: Colors.black87,
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => EmpProfile(
-                                  empId: widget.empId,
-                                  empName: widget.empName,
-                                  authToken: widget.authToken,
-                                ),
-                              ),
-                            );
-                          },
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: RichText(
+                  textAlign: TextAlign.center,
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '${_getGreetingMessage()} : ',
+                        style: const TextStyle(
+                          color: Color(0xFF039C0D),
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                  ],
+                      TextSpan(
+                        text: widget.empName.toUpperCase(),
+                        style: const TextStyle(
+                          color: Color(0xFF0C0D0C),
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: RichText(
-                textAlign: TextAlign.center,
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '${_getGreetingMessage()} : ',
-                      style: const TextStyle(
-                        color: Color(0xFF039C0D),
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    TextSpan(
-                      text: widget.empName.toUpperCase(),
-                      style: const TextStyle(
-                        color: Color(0xFF0C0D0C),
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 2),
+              Text(
+                today,
+                style: const TextStyle(fontSize: 12, color: Colors.black54),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              today,
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-            const Divider(height: 8, thickness: 0.5, indent: 16, endIndent: 16),
-            // ── Scrollable body ────────────────────────────────────────────
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  await fetchShifts();
-                  await fetchStatus();
-                },
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: Column(
-                  children: [
-                  const SizedBox(height: 4),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-              child: isShiftsLoading || isStatusLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  // ── Single shift → show as a locked info card ──────────────
-                  : empShifts.length == 1
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.teal.shade50.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.teal.shade100, width: 1.2),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.badge_rounded, color: Colors.teal.shade700, size: 22),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Assigned Shift',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.teal.shade700,
-                                    fontWeight: FontWeight.bold,
+              const Divider(
+                height: 8,
+                thickness: 0.5,
+                indent: 16,
+                endIndent: 16,
+              ),
+              // ── Scrollable body ────────────────────────────────────────────
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    _lastAutoRefresh = DateTime.now();
+                    await fetchShifts();
+                    await fetchStatus();
+                  },
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 6,
+                          ),
+                          child:
+                              isShiftsLoading || isStatusLoading
+                                  ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                  // ── Single shift → show as a locked info card ──────────────
+                                  : empShifts.length == 1
+                                  ? Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 14,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.teal.shade50.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.teal.shade100,
+                                        width: 1.2,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.badge_rounded,
+                                          color: Colors.teal.shade700,
+                                          size: 22,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Assigned Shift',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.teal.shade700,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                empShifts[0]['name']
+                                                        ?.toString() ??
+                                                    '',
+                                                style: const TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(
+                                          Icons.lock_outline_rounded,
+                                          color: Colors.teal.shade300,
+                                          size: 18,
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                  // ── Multiple shifts → show dropdown ────────────────────────
+                                  : empShifts.isEmpty
+                                  ? Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withValues(
+                                        alpha: 0.08,
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.orange.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.warning_amber_rounded,
+                                          color: Colors.orange,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        const Expanded(
+                                          child: Text(
+                                            'No shifts assigned. Contact your admin.',
+                                            style: TextStyle(
+                                              color: Colors.orange,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                  : DropdownButtonFormField<String>(
+                                    initialValue: selectedShift,
+                                    isExpanded: true,
+                                    hint: const Text(
+                                      'Select Your Shift',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    dropdownColor: Colors.white,
+                                    decoration: InputDecoration(
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
+                                          ),
+                                      labelText: 'Select Shift',
+                                      labelStyle: TextStyle(
+                                        color: Colors.teal.shade700,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                      prefixIcon: Icon(
+                                        Icons.badge_rounded,
+                                        color: Colors.teal.shade700,
+                                        size: 22,
+                                      ),
+                                      filled: true,
+                                      fillColor: Colors.teal.shade50.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                        borderSide: BorderSide(
+                                          color: Colors.teal.shade100,
+                                          width: 1.2,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                        borderSide: BorderSide(
+                                          color: Colors.teal.shade700,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                    ),
+                                    icon: Icon(
+                                      Icons.arrow_drop_down_rounded,
+                                      color: Colors.teal.shade700,
+                                      size: 28,
+                                    ),
+                                    items:
+                                        empShifts.map((shift) {
+                                          return DropdownMenuItem<String>(
+                                            value: shift['id'],
+                                            child: Text(
+                                              shift['name']?.toString() ?? '',
+                                              style: const TextStyle(
+                                                color: Colors.black,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                    onChanged:
+                                        isShiftSelectable
+                                            ? (value) async {
+                                              if (value != null) {
+                                                final selectedShiftName =
+                                                    empShifts.firstWhere(
+                                                      (shift) =>
+                                                          shift['id'] == value,
+                                                      orElse:
+                                                          () => {
+                                                            'name': 'Unknown',
+                                                          },
+                                                    )['name'];
+                                                bool confirmed =
+                                                    await _showConfirmationDialog(
+                                                      context,
+                                                      'Are you sure you want to select the shift: $selectedShiftName?',
+                                                    );
+                                                if (confirmed) {
+                                                  _safeSetState(() {
+                                                    selectedShift = value;
+                                                  });
+                                                }
+                                              }
+                                            }
+                                            : null,
+                                    disabledHint: Text(
+                                      selectedShift != null
+                                          ? empShifts.firstWhere(
+                                            (s) => s['id'] == selectedShift,
+                                            orElse:
+                                                () => {'name': 'General Shift'},
+                                          )['name']
+                                          : 'Shift selection unavailable',
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                        ),
+                        const SizedBox(height: 8),
+                        // Total working hours — shown above buttons
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            'Shifts Working Time: $totalWorkingHours',
+                            style: const TextStyle(
+                              color: Color(0xFF121111),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap:
+                                      (isAllowedToCheckIn &&
+                                              !isProcessing &&
+                                              selectedShift != null &&
+                                              empShifts.any(
+                                                (shift) =>
+                                                    shift['id'] ==
+                                                        selectedShift &&
+                                                    shift['isActive'] as bool,
+                                              ))
+                                          ? () async {
+                                            final selectedShiftData = empShifts
+                                                .firstWhere(
+                                                  (shift) =>
+                                                      shift['id'] ==
+                                                      selectedShift,
+                                                  orElse:
+                                                      () => {'isActive': false},
+                                                );
+                                            if (selectedShiftData['isActive']
+                                                as bool) {
+                                              await handleCheckIn();
+                                            } else {
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Please select an active shift.',
+                                                  ),
+                                                  duration: Duration(
+                                                    seconds: 2,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          }
+                                          : null,
+                                  child: Opacity(
+                                    opacity:
+                                        (isAllowedToCheckIn &&
+                                                !isProcessing &&
+                                                selectedShift != null &&
+                                                empShifts.any(
+                                                  (shift) =>
+                                                      shift['id'] ==
+                                                          selectedShift &&
+                                                      shift['isActive'] as bool,
+                                                ))
+                                            ? 1.0
+                                            : 0.4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1AEA24),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          const Text(
+                                            'In',
+                                            style: TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          const Icon(
+                                            Icons.login,
+                                            size: 28,
+                                            color: Colors.black,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            checkInTime,
+                                            style: const TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          const Text(
+                                            'Check In',
+                                            style: TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  empShifts[0]['name']?.toString() ?? '',
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap:
+                                      (isAllowedToCheckOut && !isProcessing)
+                                          ? () async {
+                                            await handleCheckOut();
+                                          }
+                                          : null,
+                                  child: Opacity(
+                                    opacity:
+                                        (isAllowedToCheckOut && !isProcessing)
+                                            ? 1.0
+                                            : 0.4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE53935),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          const Text(
+                                            'Out',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          const Icon(
+                                            Icons.logout,
+                                            size: 28,
+                                            color: Colors.white,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            checkOutTime,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          const Text(
+                                            'Check Out',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // Attendance calendar
+                        _buildAttendanceCalendar(),
+                        const SizedBox(height: 20),
+                        // â”€â”€ Quick-access cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                        // Attendance History: all companies
+                        // OT / Late Request:  hospital / VHS accounts only
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _quickCard(
+                                  icon: Icons.history_rounded,
+                                  label: 'Attendance\nHistory',
+                                  color: Colors.teal,
+                                  onTap:
+                                      () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder:
+                                              (_) => AttendanceHistoryScreen(
+                                                empId: widget.empId,
+                                                authToken: widget.authToken,
+                                                empName: widget.empName,
+                                              ),
+                                        ),
+                                      ),
+                                ),
+                              ),
+                              if (_isVHS) ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _quickCard(
+                                    icon: Icons.more_time_rounded,
+                                    label: 'OT / Late\nRequest',
+                                    color: Colors.deepOrange,
+                                    onTap:
+                                        () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder:
+                                                (_) => OtLateRequestScreen(
+                                                  empId: widget.empId,
+                                                  authToken: widget.authToken,
+                                                  empName: widget.empName,
+                                                ),
+                                          ),
+                                        ),
                                   ),
                                 ),
                               ],
-                            ),
-                          ),
-                          Icon(Icons.lock_outline_rounded, color: Colors.teal.shade300, size: 18),
-                        ],
-                      ),
-                    )
-                  // ── Multiple shifts → show dropdown ────────────────────────
-                  : empShifts.isEmpty
-                  ? Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                          const SizedBox(width: 10),
-                          const Expanded(
-                            child: Text(
-                              'No shifts assigned. Contact your admin.',
-                              style: TextStyle(color: Colors.orange, fontSize: 13),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : DropdownButtonFormField<String>(
-                      initialValue: selectedShift,
-                      isExpanded: true,
-                      hint: const Text(
-                        'Select Your Shift',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-                      ),
-                      dropdownColor: Colors.white,
-                      decoration: InputDecoration(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        labelText: 'Select Shift',
-                        labelStyle: TextStyle(
-                          color: Colors.teal.shade700,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                        prefixIcon: Icon(Icons.badge_rounded, color: Colors.teal.shade700, size: 22),
-                        filled: true,
-                        fillColor: Colors.teal.shade50.withValues(alpha: 0.3),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: Colors.teal.shade100, width: 1.2),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: Colors.teal.shade700, width: 1.5),
-                        ),
-                      ),
-                      icon: Icon(Icons.arrow_drop_down_rounded, color: Colors.teal.shade700, size: 28),
-                      items: empShifts.map((shift) {
-                        return DropdownMenuItem<String>(
-                          value: shift['id'],
-                          child: Text(
-                            shift['name']?.toString() ?? '',
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: isShiftSelectable
-                          ? (value) async {
-                              if (value != null) {
-                                final selectedShiftName = empShifts.firstWhere(
-                                  (shift) => shift['id'] == value,
-                                  orElse: () => {'name': 'Unknown'},
-                                )['name'];
-                                bool confirmed = await _showConfirmationDialog(
-                                  context,
-                                  'Are you sure you want to select the shift: $selectedShiftName?',
-                                );
-                                if (confirmed) {
-                                  _safeSetState(() {
-                                    selectedShift = value;
-                                  });
-                                }
-                              }
-                            }
-                          : null,
-                      disabledHint: Text(
-                        selectedShift != null
-                            ? empShifts.firstWhere(
-                                (s) => s['id'] == selectedShift,
-                                orElse: () => {'name': 'General Shift'},
-                              )['name']
-                            : 'Shift selection unavailable',
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-            ),
-            const SizedBox(height: 8),
-            // Total working hours — shown above buttons
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                'Shifts Working Time: $totalWorkingHours',
-                style: const TextStyle(color: Color(0xFF121111), fontSize: 14),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap:
-                          (isAllowedToCheckIn &&
-                                  !isProcessing &&
-                                  selectedShift != null &&
-                                  empShifts.any(
-                                    (shift) =>
-                                        shift['id'] == selectedShift &&
-                                        shift['isActive'] as bool,
-                                  ))
-                              ? () async {
-                                final selectedShiftData = empShifts.firstWhere(
-                                  (shift) => shift['id'] == selectedShift,
-                                  orElse: () => {'isActive': false},
-                                );
-                                if (selectedShiftData['isActive'] as bool) {
-                                  await handleCheckIn();
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Please select an active shift.',
-                                      ),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-                                }
-                              }
-                              : null,
-                      child: Opacity(
-                        opacity:
-                            (isAllowedToCheckIn &&
-                                    !isProcessing &&
-                                    selectedShift != null &&
-                                    empShifts.any(
-                                      (shift) =>
-                                          shift['id'] == selectedShift &&
-                                          shift['isActive'] as bool,
-                                    ))
-                                ? 1.0
-                                : 0.4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1AEA24),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            children: [
-                              const Text(
-                                'In',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              const Icon(
-                                Icons.login,
-                                size: 28,
-                                color: Colors.black,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                checkInTime,
-                                style: const TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const Text(
-                                'Check In',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 12,
-                                ),
-                              ),
                             ],
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 24),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap:
-                          (isAllowedToCheckOut && !isProcessing)
-                              ? () async {
-                                await handleCheckOut();
-                              }
-                              : null,
-                      child: Opacity(
-                        opacity:
-                            (isAllowedToCheckOut && !isProcessing) ? 1.0 : 0.4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE53935),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            children: [
-                              const Text(
-                                'Out',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              const Icon(
-                                Icons.logout,
-                                size: 28,
-                                color: Colors.white,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                checkOutTime,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const Text(
-                                'Check Out',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            // Attendance calendar
-            _buildAttendanceCalendar(),
-            const SizedBox(height: 20),
-            // â”€â”€ Quick-access cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            // Attendance History: all companies
-            // OT / Late Request:  hospital / VHS accounts only
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _quickCard(
-                      icon: Icons.history_rounded,
-                      label: 'Attendance\nHistory',
-                      color: Colors.teal,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AttendanceHistoryScreen(
-                            empId: widget.empId,
-                            authToken: widget.authToken,
-                            empName: widget.empName,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_isHospitalAccount) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _quickCard(
-                        icon: Icons.more_time_rounded,
-                        label: 'OT / Late\nRequest',
-                        color: Colors.deepOrange,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => OtLateRequestScreen(
-                              empId: widget.empId,
-                              authToken: widget.authToken,
-                              empName: widget.empName,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-                  ],
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
           ),
         );
       }
+      // VHS (company 2): 4 tabs — Attendance / Leaves / Expenses / More
+      if (_isVHS) {
+        switch (index) {
+          case 1:
+            return LeaveScreen(
+              empId: widget.empId,
+              empName: widget.empName,
+              authToken: widget.authToken,
+              companyId: widget.companyId,
+              deviceSerialNumber: widget.deviceSerialNumber,
+              isAdmin: isAdminUser,
+            );
+          case 2:
+            return VHSExpensesScreen(
+              empId: widget.empId,
+              empName: widget.empName,
+              authToken: widget.authToken,
+              companyId: widget.companyId,
+              deviceSerialNumber: widget.deviceSerialNumber,
+              isAdmin: isAdminUser,
+            );
+          case 3:
+            return MoreScreen(
+              empId: widget.empId,
+              empName: widget.empName,
+              authToken: widget.authToken,
+              companyId: widget.companyId,
+              deviceSerialNumber: widget.deviceSerialNumber,
+              isAdmin: isAdminUser,
+            );
+          default:
+            return Container();
+        }
+      }
+
+      // Eltrive & others: 5 tabs
       switch (index) {
         case 1:
           return LeaveScreen(
@@ -3455,5 +3960,3 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     );
   }
 }
-
-

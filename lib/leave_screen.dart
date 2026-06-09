@@ -762,109 +762,85 @@ class _LeaveScreenState extends State<LeaveScreen>
     }
     return RefreshIndicator(
       onRefresh: _fetchLeaveHistory,
-      child: ListView.builder(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
-        itemCount: _leaveHistory.length,
-        itemBuilder: (ctx, i) => _buildHistoryCard(_leaveHistory[i]),
-      ),
-    );
-  }
-
-  Widget _buildHistoryCard(Map<String, dynamic> leave) {
-    final type = leave['leave_type']?.toString() ?? leave['leave_type_name']?.toString() ?? 'Leave';
-    final fromDate = leave['from_date']?.toString() ?? leave['leave_from']?.toString() ?? '';
-    final toDate = leave['to_date']?.toString() ?? leave['leave_to']?.toString() ?? '';
-    final days = leave['total_days']?.toString() ?? leave['days']?.toString() ?? '1';
-    final status = leave['status']?.toString() ?? 'pending';
-    final reason = leave['reason']?.toString() ?? '';
-    final managerRemarks = leave['manager_remarks']?.toString() ?? leave['remarks']?.toString() ?? leave['comments']?.toString() ?? '';
-
-    final statusColor = _leaveStatusColor(status);
-
-    String displayDateRange = fromDate;
-    try {
-      final from = DateTime.parse(fromDate);
-      final to = DateTime.parse(toDate);
-      displayDateRange = fromDate == toDate
-          ? DateFormat('dd MMM yyyy').format(from)
-          : '${DateFormat('dd MMM').format(from)} – ${DateFormat('dd MMM yyyy').format(to)}';
-    } catch (_) {}
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.teal.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(type, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.teal)),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    status.toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.date_range_rounded, size: 14, color: Colors.grey),
-                const SizedBox(width: 5),
-                Text(displayDateRange, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                const SizedBox(width: 12),
-                const Icon(Icons.calendar_view_day_rounded, size: 14, color: Colors.grey),
-                const SizedBox(width: 4),
-                Text('$days day(s)', style: const TextStyle(fontSize: 13, color: Colors.grey)),
-              ],
-            ),
-            if (reason.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(reason, style: const TextStyle(fontSize: 13, color: Colors.black54)),
-            ],
-            if (managerRemarks.isNotEmpty) ...[
-              const SizedBox(height: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            children: [
+              // Header
               Container(
-                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.teal.shade700,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 ),
                 child: Row(
-                  children: [
-                    Icon(Icons.person_rounded, size: 14, color: statusColor),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Manager: $managerRemarks',
-                        style: TextStyle(fontSize: 12, color: statusColor, fontStyle: FontStyle.italic),
-                      ),
-                    ),
+                  children: const [
+                    _LvCell(text: 'From', isHeader: true, flex: 3),
+                    _LvCell(text: 'To', isHeader: true, flex: 3),
+                    _LvCell(text: 'Type', isHeader: true, flex: 3),
+                    _LvCell(text: 'Status', isHeader: true, flex: 3),
                   ],
                 ),
               ),
+              // Rows
+              ...List.generate(_leaveHistory.length, (i) {
+                final leave = _leaveHistory[i];
+                final fromDate = leave['from_date']?.toString() ?? leave['leave_from']?.toString() ?? '';
+                final toDate   = leave['to_date']?.toString()   ?? leave['leave_to']?.toString()   ?? '';
+                final type     = leave['leave_type']?.toString() ?? leave['leave_type_name']?.toString() ?? 'Leave';
+                final status   = leave['status']?.toString() ?? 'pending';
+                final statusColor = _leaveStatusColor(status);
+
+                String fmt(String d) {
+                  try { return DateFormat('dd MMM yy').format(DateTime.parse(d)); } catch (_) { return d; }
+                }
+
+                final isEven = i % 2 == 0;
+                return Container(
+                  decoration: BoxDecoration(
+                    color: isEven ? Colors.grey.shade50 : Colors.white,
+                    border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                    borderRadius: i == _leaveHistory.length - 1
+                        ? const BorderRadius.vertical(bottom: Radius.circular(16))
+                        : BorderRadius.zero,
+                  ),
+                  child: Row(
+                    children: [
+                      _LvCell(text: fmt(fromDate), flex: 3),
+                      _LvCell(text: fmt(toDate), flex: 3),
+                      _LvCell(text: type, flex: 3),
+                      Expanded(
+                        flex: 3,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                            ),
+                            child: Text(
+                              status.toUpperCase(),
+                              style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -905,6 +881,34 @@ class _LeaveScreenState extends State<LeaveScreen>
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.teal, width: 1.5),
+      ),
+    );
+  }
+}
+
+class _LvCell extends StatelessWidget {
+  final String text;
+  final bool isHeader;
+  final int flex;
+
+  const _LvCell({required this.text, this.isHeader = false, required this.flex});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: isHeader ? 11 : 12,
+            fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+            color: isHeader ? Colors.white : Colors.black87,
+          ),
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
     );
   }
