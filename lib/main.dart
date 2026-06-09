@@ -222,7 +222,30 @@ class _SplashScreenState extends State<SplashScreen> {
       final isUpdateAvailable = await _shorebirdCodePush.isNewPatchAvailableForDownload();
       if (isUpdateAvailable) {
         await _shorebirdCodePush.downloadUpdateIfAvailable();
-        debugPrint('Shorebird update downloaded successfully! It will apply on next restart.');
+        debugPrint('Shorebird update downloaded successfully! Prompting restart.');
+        if (mounted) {
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Update Downloaded'),
+              content: const Text(
+                'A new update has been downloaded. Please restart the app to apply the latest changes.',
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    // Close dialog and proceed — patch applies on next cold start
+                    Navigator.of(ctx).pop();
+                    _checkLoginStatus();
+                  },
+                  child: const Text('Restart Later'),
+                ),
+              ],
+            ),
+          );
+          return; // _checkLoginStatus called from dialog action
+        }
       }
     } catch (e) {
       debugPrint('Shorebird update check failed: $e');
