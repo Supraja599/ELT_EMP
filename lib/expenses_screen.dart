@@ -618,17 +618,20 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
                             // 1. Expense Type
                             _sectionLabel('Expense Type *'),
-                            DropdownButtonFormField<Map<String, dynamic>>(
+                            DropdownMenu<Map<String, dynamic>>(
                               key: ValueKey('expType_$_formVersion'),
-                              initialValue: _selExpenseType,
-                              isExpanded: true,
-                              decoration: _dec('Select Expense Type', Icons.category_rounded),
-                              dropdownColor: Colors.white,
-                              items: _expenseTypes.map((t) => DropdownMenuItem(
-                                value: t,
-                                child: Text(t['name']?.toString() ?? '', overflow: TextOverflow.ellipsis),
-                              )).toList(),
-                              onChanged: (v) {
+                              initialSelection: _selExpenseType,
+                              expandedInsets: EdgeInsets.zero,
+                              requestFocusOnTap: false,
+                              label: const Text('Select Expense Type'),
+                              leadingIcon: const Icon(Icons.category_rounded, color: Colors.teal, size: 20),
+                              dropdownMenuEntries: _expenseTypes.map((t) {
+                                return DropdownMenuEntry<Map<String, dynamic>>(
+                                  value: t,
+                                  label: t['name']?.toString() ?? '',
+                                );
+                              }).toList(),
+                              onSelected: (v) {
                                 setState(() {
                                   _selExpenseType = v;
                                   // Auto-detect fuel expense by name
@@ -641,6 +644,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                   if (!_isFuelExpense) _selFuelType = null;
                                 });
                               },
+                              inputDecorationTheme: InputDecorationTheme(
+                                filled: true,
+                                fillColor: const Color(0xFFF9FAFB),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.teal, width: 1.5)),
+                                labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                              ),
                             ),
                             const SizedBox(height: 16),
 
@@ -673,17 +684,28 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                             // 3a. Company (normal expense only)
                             if (!_isFuelExpense) ...[
                               _sectionLabel('Company *'),
-                              DropdownButtonFormField<Map<String, dynamic>>(
+                              DropdownMenu<Map<String, dynamic>>(
                                 key: ValueKey('company_$_formVersion'),
-                                initialValue: _selCompany,
-                                isExpanded: true,
-                                decoration: _dec('Select Company', Icons.business_rounded),
-                                dropdownColor: Colors.white,
-                                items: _companies.map((c) => DropdownMenuItem(
-                                  value: c,
-                                  child: Text(c['company_name']?.toString() ?? '', overflow: TextOverflow.ellipsis),
-                                )).toList(),
-                                onChanged: (v) => setState(() => _selCompany = v),
+                                initialSelection: _selCompany,
+                                expandedInsets: EdgeInsets.zero,
+                                requestFocusOnTap: false,
+                                label: const Text('Select Company'),
+                                leadingIcon: const Icon(Icons.business_rounded, color: Colors.teal, size: 20),
+                                dropdownMenuEntries: _companies.map((c) {
+                                  return DropdownMenuEntry<Map<String, dynamic>>(
+                                    value: c,
+                                    label: c['company_name']?.toString() ?? '',
+                                  );
+                                }).toList(),
+                                onSelected: (v) => setState(() => _selCompany = v),
+                                inputDecorationTheme: InputDecorationTheme(
+                                  filled: true,
+                                  fillColor: const Color(0xFFF9FAFB),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.teal, width: 1.5)),
+                                  labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                                ),
                               ),
                               const SizedBox(height: 16),
 
@@ -715,17 +737,28 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                             // 3c. Fuel Type (fuel expense only)
                             if (_isFuelExpense) ...[
                               _sectionLabel('Fuel Type *'),
-                              DropdownButtonFormField<Map<String, dynamic>>(
+                              DropdownMenu<Map<String, dynamic>>(
                                 key: ValueKey('fuel_$_formVersion'),
-                                initialValue: _selFuelType,
-                                isExpanded: true,
-                                decoration: _dec('Select Fuel Type', Icons.local_gas_station_rounded),
-                                dropdownColor: Colors.white,
-                                items: _fuelTypes.map((f) => DropdownMenuItem(
-                                  value: f,
-                                  child: Text(f['name']?.toString() ?? ''),
-                                )).toList(),
-                                onChanged: (v) => setState(() => _selFuelType = v),
+                                initialSelection: _selFuelType,
+                                expandedInsets: EdgeInsets.zero,
+                                requestFocusOnTap: false,
+                                label: const Text('Select Fuel Type'),
+                                leadingIcon: const Icon(Icons.local_gas_station_rounded, color: Colors.teal, size: 20),
+                                dropdownMenuEntries: _fuelTypes.map((f) {
+                                  return DropdownMenuEntry<Map<String, dynamic>>(
+                                    value: f,
+                                    label: f['name']?.toString() ?? '',
+                                  );
+                                }).toList(),
+                                onSelected: (v) => setState(() => _selFuelType = v),
+                                inputDecorationTheme: InputDecorationTheme(
+                                  filled: true,
+                                  fillColor: const Color(0xFFF9FAFB),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.teal, width: 1.5)),
+                                  labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                                ),
                               ),
                               const SizedBox(height: 16),
                             ],

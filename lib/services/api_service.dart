@@ -716,6 +716,127 @@ class ApiService {
     );
   }
 
+  /// VHS Overtime: Create overtime request
+  /// POST /api/overtime/create
+  static Future<http.Response> createOvertimeVHS({
+    required String authToken,
+    required String empId,
+    required String date,
+    required String shiftId,
+    required String checkinTime,
+    required String checkoutTime,
+    required int otMinutes,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/overtime/create',
+      authToken: authToken,
+      body: {
+        'auth_token': authToken,
+        'emp_id': empId,
+        'date': date,
+        'shift_id': shiftId,
+        'checkin_time': checkinTime,
+        'checkout_time': checkoutTime,
+        'ot_minutes': otMinutes,
+      },
+    );
+  }
+
+  /// VHS Overtime: Fetch overtime history
+  /// POST /api/overtime/list
+  static Future<http.Response> fetchOvertimeListVHS({
+    required String authToken,
+    required String empId,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/overtime/list',
+      authToken: authToken,
+      body: {'auth_token': authToken, 'emp_id': empId},
+    );
+  }
+
+  /// VHS Overtime Admin: Fetch all pending overtime records
+  /// POST /api/adminrequests/pendingOvertime
+  static Future<http.Response> fetchAdminOvertimeVHS({
+    required String authToken,
+    required String empId,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/adminrequests/pendingOvertime',
+      authToken: authToken,
+      body: {'auth_token': authToken, 'emp_id': empId},
+    );
+  }
+
+  /// VHS Overtime Admin: Approve an overtime request
+  /// POST /api/overtime/approve
+  static Future<http.Response> approveOvertimeVHS({
+    required String authToken,
+    required String empId,
+    required int id,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/overtime/approve',
+      authToken: authToken,
+      body: {'auth_token': authToken, 'emp_id': empId, 'id': id},
+    );
+  }
+
+  /// VHS Overtime Admin: Reject an overtime request
+  /// POST /api/overtime/reject
+  static Future<http.Response> rejectOvertimeVHS({
+    required String authToken,
+    required String empId,
+    required int id,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/overtime/reject',
+      authToken: authToken,
+      body: {'auth_token': authToken, 'emp_id': empId, 'id': id},
+    );
+  }
+
+  /// VHS Regularization Admin: Fetch all pending regularization records
+  /// POST /api/adminrequests/pendingRegularizations
+  static Future<http.Response> fetchAdminRegularizationVHS({
+    required String authToken,
+    required String empId,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/adminrequests/pendingRegularizations',
+      authToken: authToken,
+      body: {'auth_token': authToken, 'emp_id': empId},
+    );
+  }
+
+  /// VHS Regularization Admin: Approve a regularization request
+  /// POST /api/regularization/approve
+  static Future<http.Response> approveRegularizationVHS({
+    required String authToken,
+    required String empId,
+    required int id,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/regularization/approve',
+      authToken: authToken,
+      body: {'auth_token': authToken, 'emp_id': empId, 'id': id},
+    );
+  }
+
+  /// VHS Regularization Admin: Reject a regularization request
+  /// POST /api/regularization/reject
+  static Future<http.Response> rejectRegularizationVHS({
+    required String authToken,
+    required String empId,
+    required int id,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/regularization/reject',
+      authToken: authToken,
+      body: {'auth_token': authToken, 'emp_id': empId, 'id': id},
+    );
+  }
+
   static Future<http.Response> submitWorkUpdate({
     required Map<String, dynamic> body,
   }) async {

@@ -262,30 +262,42 @@ class _WorkUpdateScreenState extends State<WorkUpdateScreen> {
                 ),
                 const SizedBox(height: 16),
                 _label("Next Action"),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
+                FormField<String>(
                   initialValue: _selectedNextAction,
-                  decoration: _inputDecoration(hint: "Select next action"),
-                  items: const [
-                    DropdownMenuItem(
-                        value: "Visit Again", child: Text("Visit Again")),
-                    DropdownMenuItem(
-                        value: "No Visit", child: Text("No Visit")),
-                    DropdownMenuItem(
-                        value: "Action Required",
-                        child: Text("Action Required")),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedNextAction = value;
-                      _nextActionController.text = value ?? "";
-                      if (value != "Visit Again") {
-                        _nextVisitDateController.clear();
-                      }
-                    });
+                  validator: (value) => value == null ? "Please select next action" : null,
+                  builder: (FormFieldState<String> field) {
+                    return InputDecorator(
+                      decoration: InputDecoration(
+                        errorText: field.errorText,
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      child: DropdownMenu<String>(
+                        expandedInsets: EdgeInsets.zero,
+                        requestFocusOnTap: false,
+                        initialSelection: field.value,
+                        label: const Text("Select next action"),
+                        dropdownMenuEntries: const [
+                          DropdownMenuEntry(value: "Visit Again", label: "Visit Again"),
+                          DropdownMenuEntry(value: "No Visit", label: "No Visit"),
+                          DropdownMenuEntry(value: "Action Required", label: "Action Required"),
+                        ],
+                        onSelected: (value) {
+                          field.didChange(value);
+                          setState(() {
+                            _selectedNextAction = value;
+                            _nextActionController.text = value ?? "";
+                            if (value != "Visit Again") {
+                              _nextVisitDateController.clear();
+                            }
+                          });
+                        },
+                        inputDecorationTheme: InputDecorationTheme(
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    );
                   },
-                  validator: (value) =>
-                  value == null ? "Please select next action" : null,
                 ),
 
                 if (_selectedNextAction == "Visit Again") ...[
@@ -321,23 +333,38 @@ class _WorkUpdateScreenState extends State<WorkUpdateScreen> {
 
                 const SizedBox(height: 16),
                 _label("Program Available"),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
+                FormField<String>(
                   initialValue: _selectedProgramAvailable,
-                  decoration:
-                  _inputDecoration(hint: "Select program availability"),
-                  items: const [
-                    DropdownMenuItem(value: "Yes", child: Text("Yes")),
-                    DropdownMenuItem(value: "No", child: Text("No")),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedProgramAvailable = value;
-                      _programController.text = value ?? "";
-                    });
+                  validator: (value) => value == null ? "Please select Yes or No" : null,
+                  builder: (FormFieldState<String> field) {
+                    return InputDecorator(
+                      decoration: InputDecoration(
+                        errorText: field.errorText,
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      child: DropdownMenu<String>(
+                        expandedInsets: EdgeInsets.zero,
+                        requestFocusOnTap: false,
+                        initialSelection: field.value,
+                        label: const Text("Select program availability"),
+                        dropdownMenuEntries: const [
+                          DropdownMenuEntry(value: "Yes", label: "Yes"),
+                          DropdownMenuEntry(value: "No", label: "No"),
+                        ],
+                        onSelected: (value) {
+                          field.didChange(value);
+                          setState(() {
+                            _selectedProgramAvailable = value;
+                            _programController.text = value ?? "";
+                          });
+                        },
+                        inputDecorationTheme: InputDecorationTheme(
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    );
                   },
-                  validator: (value) =>
-                  value == null ? "Please select Yes or No" : null,
                 ),
 
                 const SizedBox(height: 30),

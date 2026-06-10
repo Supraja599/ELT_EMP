@@ -50,7 +50,9 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
   final _expDescCtrl   = TextEditingController();
   final _expBillNoCtrl = TextEditingController();
   DateTime _expBillDate = DateTime.now();
-  bool _gstOn = true;
+  bool _gstOn = false;
+  List<Map<String, dynamic>> _companies = [];
+  Map<String, dynamic>? _selCompany;
   File? _billFile;
   bool _expSubmitting = false;
   int _formVersion = 0;
@@ -144,6 +146,7 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
           setState(() {
             _expenseTypes = toList(data['expenses_types']);
             _projectTypes = toList(data['project_types']);
+            _companies    = toList(data['companies']);
           });
         }
       }
@@ -234,6 +237,8 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
         'project_type_id':  _selProject!['id'],
         'gst_applicable':   _gstOn ? 'yes' : 'no',
         'company_id':       widget.companyId,
+        if (_gstOn && _selCompany != null)
+          'gst_company_id': _selCompany!['id'],
         'details': [
           {
             'bill_number':      _expBillNoCtrl.text.trim(),
@@ -254,7 +259,8 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
           _formVersion++;
           _selExpType = null;
           _selProject = null;
-          _gstOn = true;
+          _gstOn = false;
+          _selCompany = null;
           _billFile = null;
           _expBillDate = DateTime.now();
         });
@@ -458,12 +464,19 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
                   _sectionTitle('Expense Type *'),
                   DropdownButtonFormField<Map<String, dynamic>>(
                     key: ValueKey('expType_$_formVersion'),
-                    isExpanded: true,
-                    decoration: _dec('Select Expense Type', Icons.category_rounded),
-                    dropdownColor: Colors.white,
-                    items: _expenseTypes.map((t) => DropdownMenuItem(
+                    initialValue: _selExpType,
+                    hint: const Text('Select Expense Type'),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.category_rounded, color: Colors.teal, size: 20),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Colors.teal, width: 1.5)),
+                    ),
+                    items: _expenseTypes.map((t) => DropdownMenuItem<Map<String, dynamic>>(
                       value: t,
-                      child: Text(t['name']?.toString() ?? '', overflow: TextOverflow.ellipsis),
+                      child: Text(t['name']?.toString() ?? ''),
                     )).toList(),
                     onChanged: (v) => setState(() => _selExpType = v),
                   ),
@@ -473,18 +486,25 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
                   _sectionTitle('Project *'),
                   DropdownButtonFormField<Map<String, dynamic>>(
                     key: ValueKey('project_$_formVersion'),
-                    isExpanded: true,
-                    decoration: _dec('Select Project', Icons.work_rounded),
-                    dropdownColor: Colors.white,
-                    items: _projectTypes.map((t) => DropdownMenuItem(
+                    initialValue: _selProject,
+                    hint: const Text('Select Project'),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.work_rounded, color: Colors.teal, size: 20),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Colors.teal, width: 1.5)),
+                    ),
+                    items: _projectTypes.map((t) => DropdownMenuItem<Map<String, dynamic>>(
                       value: t,
-                      child: Text(t['name']?.toString() ?? '', overflow: TextOverflow.ellipsis),
+                      child: Text(t['name']?.toString() ?? ''),
                     )).toList(),
                     onChanged: (v) => setState(() => _selProject = v),
                   ),
                   const SizedBox(height: 16),
 
-                  // GST toggle (ON by default)
+                  // GST toggle (OFF by default for VHS)
                   Row(
                     children: [
                       const Icon(Icons.receipt_rounded, color: Colors.teal, size: 20),
@@ -495,12 +515,38 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
                         value: _gstOn,
                         activeThumbColor: Colors.purple,
                         activeTrackColor: Colors.teal.withValues(alpha: 0.4),
-                        onChanged: (v) => setState(() => _gstOn = v),
+                        onChanged: (v) => setState(() {
+                          _gstOn = v;
+                          if (!v) _selCompany = null;
+                        }),
                       ),
                       Text(_gstOn ? 'Yes' : 'No',
                           style: TextStyle(color: _gstOn ? Colors.purple : Colors.grey, fontWeight: FontWeight.bold)),
                     ],
                   ),
+                  // Company dropdown — visible only when GST is ON
+                  if (_gstOn) ...[
+                    const SizedBox(height: 12),
+                    _sectionTitle('Company *'),
+                    DropdownButtonFormField<Map<String, dynamic>>(
+                      key: ValueKey('company_$_formVersion'),
+                      initialValue: _selCompany,
+                      hint: const Text('Select Company'),
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.business_rounded, color: Colors.teal, size: 20),
+                        filled: true,
+                        fillColor: const Color(0xFFF9FAFB),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                        focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Colors.teal, width: 1.5)),
+                      ),
+                      items: _companies.map((c) => DropdownMenuItem<Map<String, dynamic>>(
+                        value: c,
+                        child: Text(c['name']?.toString() ?? '', overflow: TextOverflow.ellipsis),
+                      )).toList(),
+                      onChanged: (v) => setState(() => _selCompany = v),
+                    ),
+                  ],
                   const SizedBox(height: 16),
 
                   // Bill Date

@@ -257,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
           final authToken = json['auth_token'] ?? "";
           final companyId = json['company_id']?.toString() ?? ""; // ✅ ADD
 
-          final role = json['user_role']?.toString() ?? (empId == "0" ? "admin" : "employee");
+          final role = (json['role_id'] ?? json['user_role'])?.toString() ?? (empId == "0" ? "admin" : "employee");
 
           debugPrint('🆔 Login success - Role: $role, Emp ID: $empId, Company ID: $companyId, Auth Token: ${authToken.substring(0, 20)}...');
 
@@ -293,13 +293,14 @@ class _LoginScreenState extends State<LoginScreen> {
           // Navigate
           if (!mounted) return;
           final nav = Navigator.of(context);
-          if (role == "admin") {
+          if (role == "admin" || role == "1" || role == "2") {
             debugPrint('👑 Navigating to Admin Page');
             nav.pushReplacement(
               MaterialPageRoute(
                 builder: (_) => AdminPage(
                   empName: empName,
                   companyId: companyId,
+                  companyLogo: companyLogo,
                   pendingCheckinRequests: [],
                   pendingCheckoutRequests: [],
                   pendingDeviceRequests: [],
@@ -420,6 +421,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextField(
                         controller: userIdController,
                         keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        textCapitalization: TextCapitalization.none,
                         style: const TextStyle(color: Color(0xFF111827), fontSize: 15),
                         decoration: InputDecoration(
                           labelText: "Email",
@@ -511,28 +515,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 32),
-                // Vehicles at the bottom
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Image.asset(
-                        'assets/eltrive_cargo_blue.png',
-                        height: 125,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Image.asset(
-                        'assets/eltrive_sweeper_blue.png',
-                        height: 125,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ],
-                ),
+
               ],
             ),
           ),

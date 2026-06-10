@@ -14,6 +14,7 @@ import 'check_in_out_screen.dart';
 class AdminPage extends StatefulWidget {
   final String empName;
   final String companyId;
+  final String companyLogo;
 
   final List<Map<String, dynamic>> pendingCheckinRequests;
   final List<Map<String, dynamic>> pendingCheckoutRequests;
@@ -24,6 +25,7 @@ class AdminPage extends StatefulWidget {
     super.key,
     required this.empName,
     this.companyId = '',
+    this.companyLogo = '',
     this.pendingCheckinRequests = const [],
     this.pendingCheckoutRequests = const [],
     this.pendingDeviceRequests = const [],
@@ -46,9 +48,23 @@ class _AdminPageState extends State<AdminPage>
   List<Map<String, dynamic>> _ot = [];
   bool _isLoadingOt = false;
 
-  // company_id "1" = Eltrive, "2" = VHS hospital
-  // Read directly from widget — no async loading needed
-  bool get _isHospitalAccount => widget.companyId == '2';
+  // New VHS overtime (from /api/overtime/create flow)
+  List<Map<String, dynamic>> _vhsOt = [];
+  bool _isLoadingVhsOt = false;
+
+  // VHS regularization requests
+  List<Map<String, dynamic>> _vhsReg = [];
+  bool _isLoadingVhsReg = false;
+
+  // company_id "2" = VHS hospital; also fall back to logo URL check
+  bool get _isHospitalAccount {
+    if (widget.companyId == '2') return true;
+    final logo = widget.companyLogo.toLowerCase();
+    return logo.contains('vhs') ||
+        logo.contains('visakha') ||
+        logo.contains('hospital') ||
+        logo.contains('vhc');
+  }
 
   late TabController _tabController;
   int _selectedTabIndex = 0; // 0=checkin, 1=checkout, 2=device, 3=leave, 4=ot(hospital only)
@@ -97,7 +113,11 @@ class _AdminPageState extends State<AdminPage>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _refreshPendingRequests();
       // OT requests are only relevant for hospital / VHS accounts
-      if (_isHospitalAccount) _refreshOtRequests();
+      if (_isHospitalAccount) {
+        _refreshOtRequests();
+        _refreshVhsOtRequests();
+        _refreshVhsRegRequests();
+      }
     });
   }
 
@@ -561,6 +581,208 @@ class _AdminPageState extends State<AdminPage>
   }
 
   // -----------------------------------------------------------------------
+  // 5c. VHS Overtime (new API) – fetch + approve/reject
+  // -----------------------------------------------------------------------
+  Future<void> _refreshVhsOtRequests() async {
+    if (!await _checkConnectivity()) return;
+    setState(() => _isLoadingVhsOt = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken') ?? '';
+      final adminEmpId = prefs.getString('empId') ?? '';
+      final response = await ApiService.fetchAdminOvertimeVHS(
+          authToken: token, empId: adminEmpId);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List raw = data['pending_overtime'] ?? data['overtime_records'] ?? data['records'] ?? [];
+        setState(() {
+          _vhsOt = raw.map((e) => Map<String, dynamic>.from(e)).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('VHS OT refresh error: $e');
+    } finally {
+      setState(() => _isLoadingVhsOt = false);
+    }
+  }
+
+  Future<void> _handleVhsOtAction(
+      String id, String action, String empName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '${action == 'approve' ? 'Approve' : 'Reject'} Overtime',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          '${action == 'approve' ? 'Approve' : 'Reject'} overtime request for $empName?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: action == 'approve' ? Colors.green : Colors.red,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              action == 'approve' ? 'Approve' : 'Reject',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    setState(() => _isLoadingVhsOt = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken') ?? '';
+      final adminEmpId = prefs.getString('empId') ?? '';
+      final recordId = int.tryParse(id) ?? 0;
+
+      final response = action == 'approve'
+          ? await ApiService.approveOvertimeVHS(
+              authToken: token, empId: adminEmpId, id: recordId)
+          : await ApiService.rejectOvertimeVHS(
+              authToken: token, empId: adminEmpId, id: recordId);
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        setState(() => _vhsOt.removeWhere((e) => e['id'].toString() == id));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Overtime ${action}d for $empName'),
+            backgroundColor: action == 'approve' ? Colors.green : Colors.red,
+          ));
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(data['message'] ?? 'Failed to $action request'),
+            backgroundColor: Colors.red,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      setState(() => _isLoadingVhsOt = false);
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // 5d. VHS Regularization – fetch + approve/reject
+  // -----------------------------------------------------------------------
+  Future<void> _refreshVhsRegRequests() async {
+    if (!await _checkConnectivity()) return;
+    setState(() => _isLoadingVhsReg = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken') ?? '';
+      final adminEmpId = prefs.getString('empId') ?? '';
+      final response = await ApiService.fetchAdminRegularizationVHS(
+          authToken: token, empId: adminEmpId);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List raw = data['pending_regularizations'] ?? data['regularization_records'] ?? data['records'] ?? [];
+        setState(() {
+          _vhsReg = raw.map((e) => Map<String, dynamic>.from(e)).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('VHS Reg refresh error: $e');
+    } finally {
+      setState(() => _isLoadingVhsReg = false);
+    }
+  }
+
+  Future<void> _handleVhsRegAction(
+      String id, String action, String empName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '${action == 'approve' ? 'Approve' : 'Reject'} Regularization',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          '${action == 'approve' ? 'Approve' : 'Reject'} regularization for $empName?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: action == 'approve' ? Colors.green : Colors.red,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              action == 'approve' ? 'Approve' : 'Reject',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    setState(() => _isLoadingVhsReg = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken') ?? '';
+      final adminEmpId = prefs.getString('empId') ?? '';
+      final recordId = int.tryParse(id) ?? 0;
+
+      final response = action == 'approve'
+          ? await ApiService.approveRegularizationVHS(
+              authToken: token, empId: adminEmpId, id: recordId)
+          : await ApiService.rejectRegularizationVHS(
+              authToken: token, empId: adminEmpId, id: recordId);
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        setState(() => _vhsReg.removeWhere((e) => e['id'].toString() == id));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Regularization ${action}d for $empName'),
+            backgroundColor: action == 'approve' ? Colors.green : Colors.red,
+          ));
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(data['message'] ?? 'Failed to $action request'),
+            backgroundColor: Colors.red,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      setState(() => _isLoadingVhsReg = false);
+    }
+  }
+
+  // -----------------------------------------------------------------------
   // 6. Confirmation dialog (unchanged)
   // -----------------------------------------------------------------------
   Future<void> _showConfirmDialog(
@@ -688,7 +910,8 @@ class _AdminPageState extends State<AdminPage>
               ),
             ],
           )
-              : AnimatedSwitcher(
+              : SingleChildScrollView(
+            child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 500),
             transitionBuilder: (child, animation) =>
                 ScaleTransition(scale: animation, child: child),
@@ -698,7 +921,7 @@ class _AdminPageState extends State<AdminPage>
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
               margin: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
+              child: Padding(
                 padding: const EdgeInsets.all(24.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -854,13 +1077,13 @@ class _AdminPageState extends State<AdminPage>
             ),
           ),
         ),
+        ),
       ),
     );
   }
 
   // ── OT / Late / Early-Checkout approval tab ─────────────────────────────
   Widget _buildOtTab() {
-    // Only hospital / VHS company accounts use OT approval
     if (!_isHospitalAccount) {
       return const Center(
         child: Column(
@@ -872,24 +1095,6 @@ class _AdminPageState extends State<AdminPage>
               'OT / Late approval is not\nenabled for your company.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey, fontSize: 16),
-            ),
-          ],
-        ),
-      );
-    }
-    if (_isLoadingOt) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_ot.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.more_time_rounded, size: 64, color: Colors.green),
-            SizedBox(height: 16),
-            Text(
-              'No pending OT / Late requests',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -921,121 +1126,427 @@ class _AdminPageState extends State<AdminPage>
       }
     }
 
-    return RefreshIndicator(
-      onRefresh: _refreshOtRequests,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _ot.length,
-        itemBuilder: (ctx, i) {
-          final req = _ot[i];
-          final id = req['id']?.toString() ?? '';
-          final type = req['request_type']?.toString() ?? '';
-          final empName = '${req['first_name'] ?? req['emp_name'] ?? ''} ${req['last_name'] ?? ''}'.trim();
-          final date = req['date']?.toString() ?? '';
-          final reason = req['reason']?.toString() ?? '';
-          final duration = req['duration']?.toString() ?? '';
-          final color = typeColor(type);
+    Widget sectionHeader(String title, IconData icon, Color color) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(0, 8, 0, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 10),
+            Text(title,
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, color: color, fontSize: 15)),
+          ],
+        ),
+      );
+    }
 
-          return Card(
-            elevation: 4,
-            margin: const EdgeInsets.only(bottom: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(typeIcon(type), color: color, size: 22),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          typeLabel(type),
-                          style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15),
-                        ),
-                      ),
-                      if (duration.isNotEmpty && duration != '00:00')
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(duration, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
-                        ),
-                    ],
-                  ),
-                ),
-                // Body
-                Padding(
+    Widget emptySection(String msg) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle_outline, color: Colors.green, size: 18),
+              const SizedBox(width: 8),
+              Text(msg,
+                  style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            ],
+          ),
+        );
+
+    Widget approveRejectRow(String id, String empName,
+        Future<void> Function(String, String, String) onAction) {
+      return Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => onAction(id, 'approve', empName),
+              icon: const Icon(Icons.check_rounded, color: Colors.white, size: 18),
+              label: const Text('Approve', style: TextStyle(color: Colors.white)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => onAction(id, 'reject', empName),
+              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
+              label: const Text('Reject', style: TextStyle(color: Colors.white)),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await Future.wait([
+          _refreshOtRequests(),
+          _refreshVhsOtRequests(),
+          _refreshVhsRegRequests(),
+        ]);
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // ── Section 1: New VHS Overtime requests ──────────────────────
+          sectionHeader('VHS Overtime Requests', Icons.access_time_rounded,
+              Colors.purple),
+          if (_isLoadingVhsOt)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_vhsOt.isEmpty)
+            emptySection('No pending overtime requests')
+          else
+            ..._vhsOt.map((req) {
+              final id = req['id']?.toString() ?? '';
+              final empName =
+                  '${req['first_name'] ?? ''} ${req['last_name'] ?? ''}'.trim();
+              final date = req['date']?.toString() ?? '';
+              final shiftName = req['shift_name']?.toString() ?? '';
+              final checkin = req['checkin_time']?.toString() ?? '';
+              final checkout = req['checkout_time']?.toString() ?? '';
+              final otMins = int.tryParse(req['ot_minutes']?.toString() ?? '0') ?? 0;
+              final otLabel = otMins >= 60
+                  ? '${otMins ~/ 60}h ${otMins % 60}m'
+                  : '${otMins}m';
+
+              return Card(
+                elevation: 3,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.person_rounded, size: 16, color: Colors.blueAccent),
+                          const Icon(Icons.person_rounded,
+                              size: 16, color: Colors.blueAccent),
                           const SizedBox(width: 6),
-                          Text(
-                            empName.isEmpty ? 'Employee #${req['emp_id'] ?? ''}' : empName,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          Expanded(
+                            child: Text(
+                              empName.isEmpty
+                                  ? 'Employee #${req['employee_id'] ?? ''}'
+                                  : empName,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.purple.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'OT: $otLabel',
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.purple,
+                                  fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.calendar_today_rounded, size: 14, color: Colors.grey),
-                          const SizedBox(width: 5),
-                          Text(date, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                        ],
-                      ),
-                      if (reason.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(reason, style: const TextStyle(fontSize: 13, color: Colors.black87)),
-                      ],
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                              onPressed: () => _approveOtRequest(id, 'approve', empName),
-                              icon: const Icon(Icons.check_rounded, color: Colors.white, size: 18),
-                              label: const Text('Approve', style: TextStyle(color: Colors.white)),
-                            ),
-                          ),
+                      Row(children: [
+                        const Icon(Icons.calendar_today_rounded,
+                            size: 13, color: Colors.grey),
+                        const SizedBox(width: 5),
+                        Flexible(child: Text(date,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.grey))),
+                        if (shiftName.isNotEmpty) ...[
                           const SizedBox(width: 10),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                              onPressed: () => _approveOtRequest(id, 'reject', empName),
-                              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
-                              label: const Text('Reject', style: TextStyle(color: Colors.white)),
-                            ),
-                          ),
+                          const Icon(Icons.work_outline_rounded,
+                              size: 13, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Flexible(child: Text(shiftName,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.grey))),
                         ],
-                      ),
+                      ]),
+                      if (checkin.isNotEmpty || checkout.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Row(children: [
+                          const Icon(Icons.login_rounded, size: 13, color: Colors.green),
+                          const SizedBox(width: 4),
+                          Text(_fmtTime(checkin),
+                              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                          const SizedBox(width: 12),
+                          const Icon(Icons.logout_rounded, size: 13, color: Colors.red),
+                          const SizedBox(width: 4),
+                          Text(_fmtTime(checkout),
+                              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                        ]),
+                      ],
+                      const SizedBox(height: 12),
+                      approveRejectRow(id, empName, _handleVhsOtAction),
                     ],
                   ),
                 ),
-              ],
-            ),
-          );
-        },
+              );
+            }),
+
+          const SizedBox(height: 8),
+
+          // ── Section 2: Regularization requests ────────────────────────
+          sectionHeader('Regularization Requests',
+              Icons.assignment_late_rounded, Colors.teal),
+          if (_isLoadingVhsReg)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_vhsReg.isEmpty)
+            emptySection('No pending regularization requests')
+          else
+            ..._vhsReg.map((req) {
+              final id = req['id']?.toString() ?? '';
+              final empName =
+                  '${req['first_name'] ?? ''} ${req['last_name'] ?? ''}'.trim();
+              final date = req['date']?.toString() ?? '';
+              final reason = req['reason']?.toString() ?? '';
+              final checkin = req['checkin_time']?.toString() ?? '';
+              final checkout = req['checkout_time']?.toString() ?? '';
+
+              return Card(
+                elevation: 3,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        const Icon(Icons.person_rounded,
+                            size: 16, color: Colors.blueAccent),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            empName.isEmpty
+                                ? 'Employee #${req['employee_id'] ?? ''}'
+                                : empName,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.teal.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text('Regularization',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.teal,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ]),
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        const Icon(Icons.calendar_today_rounded,
+                            size: 13, color: Colors.grey),
+                        const SizedBox(width: 5),
+                        Text(date,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.grey)),
+                      ]),
+                      if (checkin.isNotEmpty || checkout.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text('In: $checkin  →  Out: $checkout',
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.black54)),
+                      ],
+                      if (reason.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(reason,
+                            style: const TextStyle(
+                                fontSize: 13, color: Colors.black87)),
+                      ],
+                      const SizedBox(height: 12),
+                      approveRejectRow(id, empName, _handleVhsRegAction),
+                    ],
+                  ),
+                ),
+              );
+            }),
+
+          const SizedBox(height: 8),
+
+          // ── Section 3: Old OT / Late / Early-Checkout requests ─────────
+          sectionHeader('OT / Late Requests', Icons.more_time_rounded,
+              Colors.orange),
+          if (_isLoadingOt)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_ot.isEmpty)
+            emptySection('No pending OT / Late requests')
+          else
+            ..._ot.map((req) {
+              final id = req['id']?.toString() ?? '';
+              final type = req['request_type']?.toString() ?? '';
+              final empName =
+                  '${req['first_name'] ?? req['emp_name'] ?? ''} ${req['last_name'] ?? ''}'
+                      .trim();
+              final date = req['date']?.toString() ?? '';
+              final reason = req['reason']?.toString() ?? '';
+              final duration = req['duration']?.toString() ?? '';
+              final color = typeColor(type);
+
+              return Card(
+                elevation: 3,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius:
+                            const BorderRadius.vertical(top: Radius.circular(14)),
+                      ),
+                      child: Row(children: [
+                        Icon(typeIcon(type), color: color, size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(typeLabel(type),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: color,
+                                  fontSize: 15)),
+                        ),
+                        if (duration.isNotEmpty && duration != '00:00')
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(duration,
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: color,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                      ]),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            const Icon(Icons.person_rounded,
+                                size: 16, color: Colors.blueAccent),
+                            const SizedBox(width: 6),
+                            Text(
+                              empName.isEmpty
+                                  ? 'Employee #${req['emp_id'] ?? ''}'
+                                  : empName,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                          ]),
+                          const SizedBox(height: 6),
+                          Row(children: [
+                            const Icon(Icons.calendar_today_rounded,
+                                size: 14, color: Colors.grey),
+                            const SizedBox(width: 5),
+                            Text(date,
+                                style: const TextStyle(
+                                    fontSize: 13, color: Colors.grey)),
+                          ]),
+                          if (reason.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(reason,
+                                style: const TextStyle(
+                                    fontSize: 13, color: Colors.black87)),
+                          ],
+                          const SizedBox(height: 14),
+                          Row(children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: () =>
+                                    _approveOtRequest(id, 'approve', empName),
+                                icon: const Icon(Icons.check_rounded,
+                                    color: Colors.white, size: 18),
+                                label: const Text('Approve',
+                                    style: TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: () =>
+                                    _approveOtRequest(id, 'reject', empName),
+                                icon: const Icon(Icons.close_rounded,
+                                    color: Colors.white, size: 18),
+                                label: const Text('Reject',
+                                    style: TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                          ]),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          const SizedBox(height: 16),
+        ],
       ),
     );
+  }
+
+  // Extracts HH:mm from a datetime string like "2026-06-06 05:00:00"
+  String _fmtTime(String dt) {
+    if (dt.isEmpty) return '';
+    final parts = dt.split(' ');
+    final time = parts.length > 1 ? parts[1] : parts[0];
+    return time.length >= 5 ? time.substring(0, 5) : time;
   }
 
   // Helper to build a readable name for the confirmation dialog

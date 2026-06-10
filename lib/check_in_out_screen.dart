@@ -26,6 +26,7 @@ import 'expenses_screen.dart';
 import 'vhs_expenses_screen.dart';
 import 'more_screen.dart';
 import 'emp_profile.dart';
+import 'vhs_overtime_screen.dart';
 import 'services/api_service.dart';
 
 // Global notification plugin for foreground
@@ -3100,6 +3101,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     reasonController.dispose();
   }
 
+  // Wide horizontal card — icon left, label right (used for full-width cards)
   Widget _quickCard({
     required IconData icon,
     required String label,
@@ -3109,7 +3111,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
@@ -3118,30 +3120,72 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 22),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: color,
-                  height: 1.3,
                 ),
               ),
             ),
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 13,
-              color: color.withValues(alpha: 0.6),
+            Icon(Icons.chevron_right_rounded, size: 20, color: color.withValues(alpha: 0.5)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Square card — icon top, label bottom (used for 2-column grid)
+  Widget _squareCard({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 24),
             ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: color,
+                height: 1.3,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 4),
+            Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: color.withValues(alpha: 0.4)),
           ],
         ),
       ),
@@ -3323,6 +3367,7 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                         (_) => AdminPage(
                                           empName: widget.empName,
                                           companyId: widget.companyId,
+                                          companyLogo: _companyLogoUrl,
                                         ),
                                   ),
                                 );
@@ -3518,114 +3563,57 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                     ),
                                   )
                                   : DropdownButtonFormField<String>(
-                                    initialValue: selectedShift,
-                                    isExpanded: true,
-                                    hint: const Text(
-                                      'Select Your Shift',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w500,
+                                      key: ValueKey(selectedShift),
+                                      initialValue: selectedShift,
+                                      hint: Text(
+                                        'Select Your Shift',
+                                        style: TextStyle(color: Colors.teal.shade700, fontSize: 14),
                                       ),
-                                    ),
-                                    dropdownColor: Colors.white,
-                                    decoration: InputDecoration(
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 14,
-                                          ),
-                                      labelText: 'Select Shift',
-                                      labelStyle: TextStyle(
-                                        color: Colors.teal.shade700,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                      prefixIcon: Icon(
-                                        Icons.badge_rounded,
-                                        color: Colors.teal.shade700,
-                                        size: 22,
-                                      ),
-                                      filled: true,
-                                      fillColor: Colors.teal.shade50.withValues(
-                                        alpha: 0.3,
-                                      ),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                        borderSide: BorderSide(
-                                          color: Colors.teal.shade100,
-                                          width: 1.2,
-                                        ),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                        borderSide: BorderSide(
+                                      decoration: InputDecoration(
+                                        labelText: 'Select Shift',
+                                        labelStyle: TextStyle(
                                           color: Colors.teal.shade700,
-                                          width: 1.5,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                        prefixIcon: Icon(Icons.badge_rounded, color: Colors.teal.shade700, size: 22),
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                        filled: true,
+                                        fillColor: Colors.teal.shade50.withValues(alpha: 0.3),
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          borderSide: BorderSide(color: Colors.teal.shade100, width: 1.2),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          borderSide: BorderSide(color: Colors.teal.shade700, width: 1.5),
                                         ),
                                       ),
-                                    ),
-                                    icon: Icon(
-                                      Icons.arrow_drop_down_rounded,
-                                      color: Colors.teal.shade700,
-                                      size: 28,
-                                    ),
-                                    items:
-                                        empShifts.map((shift) {
-                                          return DropdownMenuItem<String>(
-                                            value: shift['id'],
-                                            child: Text(
-                                              shift['name']?.toString() ?? '',
-                                              style: const TextStyle(
-                                                color: Colors.black,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          );
-                                        }).toList(),
-                                    onChanged:
-                                        isShiftSelectable
-                                            ? (value) async {
-                                              if (value != null) {
-                                                final selectedShiftName =
-                                                    empShifts.firstWhere(
-                                                      (shift) =>
-                                                          shift['id'] == value,
-                                                      orElse:
-                                                          () => {
-                                                            'name': 'Unknown',
-                                                          },
-                                                    )['name'];
-                                                bool confirmed =
-                                                    await _showConfirmationDialog(
-                                                      context,
-                                                      'Are you sure you want to select the shift: $selectedShiftName?',
-                                                    );
-                                                if (confirmed) {
-                                                  _safeSetState(() {
-                                                    selectedShift = value;
-                                                  });
-                                                }
+                                      items: empShifts.map((shift) => DropdownMenuItem<String>(
+                                        value: shift['id']?.toString() ?? '',
+                                        child: Text(
+                                          shift['name']?.toString() ?? '',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      )).toList(),
+                                      onChanged: isShiftSelectable
+                                          ? (value) async {
+                                              if (value == null || value == selectedShift) return;
+                                              final shiftName = empShifts.firstWhere(
+                                                (s) => s['id'] == value,
+                                                orElse: () => {'name': 'Unknown'},
+                                              )['name'];
+                                              final confirmed = await _showConfirmationDialog(
+                                                context,
+                                                'Select shift: $shiftName?',
+                                              );
+                                              if (confirmed && mounted) {
+                                                _safeSetState(() => selectedShift = value);
                                               }
                                             }
-                                            : null,
-                                    disabledHint: Text(
-                                      selectedShift != null
-                                          ? empShifts.firstWhere(
-                                            (s) => s['id'] == selectedShift,
-                                            orElse:
-                                                () => {'name': 'General Shift'},
-                                          )['name']
-                                          : 'Shift selection unavailable',
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 14,
-                                      ),
+                                          : null,
                                     ),
-                                  ),
                         ),
                         const SizedBox(height: 8),
                         // Total working hours — shown above buttons
@@ -3813,47 +3801,66 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                         // OT / Late Request:  hospital / VHS accounts only
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Row(
+                          child: Column(
                             children: [
-                              Expanded(
-                                child: _quickCard(
-                                  icon: Icons.history_rounded,
-                                  label: 'Attendance\nHistory',
-                                  color: Colors.teal,
-                                  onTap:
-                                      () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder:
-                                              (_) => AttendanceHistoryScreen(
-                                                empId: widget.empId,
-                                                authToken: widget.authToken,
-                                                empName: widget.empName,
-                                              ),
-                                        ),
-                                      ),
+                              // Attendance History — always full width
+                              _quickCard(
+                                icon: Icons.history_rounded,
+                                label: 'Attendance History',
+                                color: Colors.teal,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => AttendanceHistoryScreen(
+                                      empId: widget.empId,
+                                      authToken: widget.authToken,
+                                      empName: widget.empName,
+                                    ),
+                                  ),
                                 ),
                               ),
+                              // VHS only: OT/Late + Overtime side by side below
                               if (_isVHS) ...[
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _quickCard(
-                                    icon: Icons.more_time_rounded,
-                                    label: 'OT / Late\nRequest',
-                                    color: Colors.deepOrange,
-                                    onTap:
-                                        () => Navigator.push(
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _squareCard(
+                                        icon: Icons.more_time_rounded,
+                                        label: 'OT / Late\nRequest',
+                                        color: Colors.deepOrange,
+                                        onTap: () => Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder:
-                                                (_) => OtLateRequestScreen(
-                                                  empId: widget.empId,
-                                                  authToken: widget.authToken,
-                                                  empName: widget.empName,
-                                                ),
+                                            builder: (_) => OtLateRequestScreen(
+                                              empId: widget.empId,
+                                              authToken: widget.authToken,
+                                              empName: widget.empName,
+                                            ),
                                           ),
                                         ),
-                                  ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _squareCard(
+                                        icon: Icons.schedule_rounded,
+                                        label: 'Overtime\nRecords',
+                                        color: Colors.purple,
+                                        onTap: () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => VHSOvertimeScreen(
+                                              empId: widget.empId,
+                                              authToken: widget.authToken,
+                                              empName: widget.empName,
+                                              empShifts: empShifts,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ],

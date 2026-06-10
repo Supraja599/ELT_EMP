@@ -562,52 +562,64 @@ class _SubProjectScreenState extends State<SubProjectScreen> {
                                 color: Colors.red,
                                 fontWeight: FontWeight.w500),
                           )
-                        : DropdownButtonFormField<String>(
-                            isExpanded: true,
-                            decoration: _buildInputDecoration(
-                              labelText: "Select Subproject",
-                              prefixIcon: Icons.account_tree_rounded,
-                            ),
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
-                            dropdownColor: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            items: widget.task.subprojects.map((sub) {
-                              return DropdownMenuItem(
+                        : DropdownMenu<String>(
+                            expandedInsets: EdgeInsets.zero,
+                            requestFocusOnTap: false,
+                            initialSelection: selectedSubproject,
+                            label: const Text("Select Subproject"),
+                            leadingIcon: Icon(Icons.account_tree_rounded, color: Colors.teal.shade700),
+                            dropdownMenuEntries: widget.task.subprojects.map((sub) {
+                              return DropdownMenuEntry<String>(
                                 value: sub,
-                                child: Text(sub, style: const TextStyle(color: Colors.black87)),
+                                label: sub,
                               );
                             }).toList(),
-                            onChanged: (val) {
+                            onSelected: (val) {
                               setState(() {
                                 selectedSubproject = val;
                               });
                             },
+                            inputDecorationTheme: InputDecorationTheme(
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.teal.shade700, width: 2)),
+                              labelStyle: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                            ),
                           ),
                   ),
 
                   buildCard(
-                    child: DropdownButtonFormField<int>(
-                      isExpanded: true,
-                      decoration: _buildInputDecoration(
-                        labelText: "Select Hours",
-                        prefixIcon: Icons.hourglass_bottom_rounded,
-                      ),
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
-                      dropdownColor: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      items: List.generate(8, (i) => i + 1).map((h) {
-                        return DropdownMenuItem(
+                    child: DropdownMenu<int>(
+                      expandedInsets: EdgeInsets.zero,
+                      requestFocusOnTap: false,
+                      initialSelection: hours == 0 ? null : hours,
+                      label: const Text("Select Hours"),
+                      leadingIcon: Icon(Icons.hourglass_bottom_rounded, color: Colors.teal.shade700),
+                      dropdownMenuEntries: List.generate(8, (i) => i + 1).map((h) {
+                        return DropdownMenuEntry<int>(
                           value: h,
-                          child: Text("$h Hours", style: const TextStyle(color: Colors.black87)),
+                          label: "$h Hours",
                         );
                       }).toList(),
-                      onChanged: (val) {
+                      onSelected: (val) {
                         if (val != null) {
                           setState(() {
                             hours = val;
                           });
                         }
                       },
+                      inputDecorationTheme: InputDecorationTheme(
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.teal.shade700, width: 2)),
+                        labelStyle: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                      ),
                     ),
                   ),
 

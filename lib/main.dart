@@ -41,80 +41,93 @@ Future<void> main() async {
 
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    debugPrint("Firebase initialized");
-  } catch (e) {
-    debugPrint("Firebase init error: $e");
-  }
+    debugPrint("Firebase initialized successfully");
 
-  final messaging = FirebaseMessaging.instance;
-  await messaging.requestPermission(alert: true, badge: true, sound: true);
-
-  // ── SAVE TOKEN LOCALLY ONLY (NO SERVER YET) ───────────────────
-  final String? token = await messaging.getToken();
-  if (token != null) {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fcm_token', token);
-    debugPrint('FCM token saved locally: $token');
-  }
-
-  // ── TOKEN REFRESH → UPLOAD ONLY IF LOGGED IN ─────────────────
-  messaging.onTokenRefresh.listen((newToken) async {
-    debugPrint('FCM token refreshed');
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fcm_token', newToken);
-
-    final authToken = prefs.getString('authToken');
-    if (authToken != null && authToken.isNotEmpty) {
-      await _uploadTokenToServer(newToken, authToken);
+    final messaging = FirebaseMessaging.instance;
+    try {
+      await messaging
+          .requestPermission(alert: true, badge: true, sound: true)
+          .timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('Permission request failed/timed out: $e');
     }
-  });
 
-  // ── BACKGROUND HANDLER
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    // ── SAVE TOKEN LOCALLY ONLY (NO SERVER YET) ───────────────────
+    try {
+      final String? token = await messaging
+          .getToken()
+          .timeout(const Duration(seconds: 8), onTimeout: () => null);
+      if (token != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('fcm_token', token);
+        debugPrint('FCM token saved locally: $token');
+      }
+    } catch (e) {
+      debugPrint('FCM token fetch failed: $e');
+    }
 
-  // ── NOTIFICATION CHANNEL
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'high_importance_channel',
-    'High Importance Notifications',
-    importance: Importance.max,
-  );
-  final androidPlugin = flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-  await androidPlugin?.createNotificationChannel(channel);
+    // ── TOKEN REFRESH → UPLOAD ONLY IF LOGGED IN ─────────────────
+    messaging.onTokenRefresh.listen((newToken) async {
+      debugPrint('FCM token refreshed');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('fcm_token', newToken);
 
-  const AndroidInitializationSettings androidInit =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
-  await flutterLocalNotificationsPlugin.initialize(
-    const InitializationSettings(android: androidInit),
-  );
+      final authToken = prefs.getString('authToken');
+      if (authToken != null && authToken.isNotEmpty) {
+        await _uploadTokenToServer(newToken, authToken);
+      }
+    });
 
-  // ── FOREGROUND
-  FirebaseMessaging.onMessage.listen((msg) {
-    final n = msg.notification;
-    if (n == null) return;
-    flutterLocalNotificationsPlugin.show(
-      n.hashCode,
-      n.title,
-      n.body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'high_importance_channel',
-          'High Importance Notifications',
-          importance: Importance.max,
-          priority: Priority.high,
-          playSound: true,
-        ),
-      ),
+    // ── BACKGROUND HANDLER
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+    // ── NOTIFICATION CHANNEL
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'high_importance_channel',
+      'High Importance Notifications',
+      importance: Importance.max,
     );
-  });
+    final androidPlugin = flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.createNotificationChannel(channel);
 
-  // ── TAP & TERMINATED
-  FirebaseMessaging.onMessageOpenedApp.listen((msg) {
-    debugPrint('Notification tapped: ${msg.notification?.title}');
-  });
-  final initMsg = await messaging.getInitialMessage();
-  if (initMsg != null) {
-    debugPrint('App opened via notification');
+    const AndroidInitializationSettings androidInit =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    await flutterLocalNotificationsPlugin.initialize(
+      const InitializationSettings(android: androidInit),
+    );
+
+    // ── FOREGROUND
+    FirebaseMessaging.onMessage.listen((msg) {
+      final n = msg.notification;
+      if (n == null) return;
+      flutterLocalNotificationsPlugin.show(
+        n.hashCode,
+        n.title,
+        n.body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'high_importance_channel',
+            'High Importance Notifications',
+            importance: Importance.max,
+            priority: Priority.high,
+            playSound: true,
+          ),
+        ),
+      );
+    });
+
+    // ── TAP & TERMINATED
+    FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+      debugPrint('Notification tapped: ${msg.notification?.title}');
+    });
+    final initMsg = await messaging.getInitialMessage();
+    if (initMsg != null) {
+      debugPrint('App opened via notification');
+    }
+  } catch (e, stacktrace) {
+    debugPrint("Firebase/Notification initialization error: $e");
+    debugPrint(stacktrace.toString());
   }
 
   runApp(const MyApp());
@@ -219,9 +232,13 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _checkForUpdatesAndLogin() async {
     try {
-      final isUpdateAvailable = await _shorebirdCodePush.isNewPatchAvailableForDownload();
+      final isUpdateAvailable = await _shorebirdCodePush
+          .isNewPatchAvailableForDownload()
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
       if (isUpdateAvailable) {
-        await _shorebirdCodePush.downloadUpdateIfAvailable();
+        await _shorebirdCodePush
+            .downloadUpdateIfAvailable()
+            .timeout(const Duration(seconds: 15), onTimeout: () {});
         debugPrint('Shorebird update downloaded successfully! Prompting restart.');
         if (mounted) {
           await showDialog(
@@ -272,7 +289,7 @@ class _SplashScreenState extends State<SplashScreen> {
         final pendingCheckout = _parse(prefs, 'pendingCheckoutRequests');
         final pendingDevice = _parse(prefs, 'pendingDeviceRequests');
         final pendingLeave = _parse(prefs, 'pendingLeaveRequests');
-        final isAdmin = userRole == 'admin' || empId == '0';
+        final isAdmin = userRole == 'admin' || userRole == '1' || userRole == '2' || empId == '0';
 
         if (!mounted) return;
         Navigator.pushReplacement(
@@ -282,6 +299,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 ? AdminPage(
               empName: empName,
               companyId: companyId,
+              companyLogo: companyLogo,
               pendingCheckinRequests: pendingCheckin,
               pendingCheckoutRequests: pendingCheckout,
               pendingDeviceRequests: pendingDevice,

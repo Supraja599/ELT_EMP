@@ -225,24 +225,15 @@ class _EmpProfileState extends State<EmpProfile> {
                             right: 20,
                           ),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const SizedBox(width: 52), // Balance spacing
-                              const Text(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Text(
                                 'Profile',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
                                 ),
-                              ),
-                              Row(
-                                children: const [
-                                  Icon(Icons.notifications_rounded, color: Colors.white, size: 24),
-                                  SizedBox(width: 12),
-                                  Icon(Icons.settings_rounded, color: Colors.white, size: 24),
-                                ],
                               ),
                             ],
                           ),
