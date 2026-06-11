@@ -46,6 +46,7 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
 
   Map<String, dynamic>? _selExpType;
   Map<String, dynamic>? _selProject;
+  Map<String, dynamic>? _selPettyCash;
   final _expAmountCtrl = TextEditingController();
   final _expDescCtrl   = TextEditingController();
   final _expBillNoCtrl = TextEditingController();
@@ -73,6 +74,7 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
       }
     });
     _loadMasterData();
+    _loadHistory();
   }
 
   @override
@@ -143,11 +145,37 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
           final data = json['data'] as Map<String, dynamic>? ?? {};
           List<Map<String, dynamic>> toList(dynamic raw) =>
               (raw as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList();
+          // support both nested (json['data']['key']) and top-level (json['key'])
+          dynamic get(String key) => data[key] ?? json[key];
           setState(() {
-            _expenseTypes = toList(data['expenses_types']);
-            _projectTypes = toList(data['project_types']);
-            _companies    = toList(data['companies']);
+            _expenseTypes = toList(get('expenses_types'));
+            _projectTypes = toList(get('project_types'));
+            _companies    = toList(get('companies'));
+
+            // Reconcile dropdown selection references to avoid crashes after reloading
+            if (_selExpType != null) {
+              final match = _expenseTypes.firstWhere(
+                (t) => t['id'] == _selExpType!['id'],
+                orElse: () => {},
+              );
+              _selExpType = match.isNotEmpty ? match : null;
+            }
+            if (_selProject != null) {
+              final match = _projectTypes.firstWhere(
+                (p) => p['id'] == _selProject!['id'],
+                orElse: () => {},
+              );
+              _selProject = match.isNotEmpty ? match : null;
+            }
+            if (_selCompany != null) {
+              final match = _companies.firstWhere(
+                (c) => c['id'] == _selCompany!['id'],
+                orElse: () => {},
+              );
+              _selCompany = match.isNotEmpty ? match : null;
+            }
           });
+          debugPrint('Master data: expTypes=${_expenseTypes.length}, projects=${_projectTypes.length}, companies=${_companies.length}');
         }
       }
     } catch (_) {
@@ -235,6 +263,8 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
       final body = {
         'expenses_type_id': _selExpType!['id'],
         'project_type_id':  _selProject!['id'],
+        if (_selPettyCash != null)
+          'petty_cash_request_id': _selPettyCash!['id'],
         'gst_applicable':   _gstOn ? 'yes' : 'no',
         'company_id':       widget.companyId,
         if (_gstOn && _selCompany != null)
@@ -259,6 +289,7 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
           _formVersion++;
           _selExpType = null;
           _selProject = null;
+          _selPettyCash = null;
           _gstOn = false;
           _selCompany = null;
           _billFile = null;
@@ -289,6 +320,15 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
           _history = (json['requests'] as List? ?? [])
               .map((e) => Map<String, dynamic>.from(e))
               .toList();
+
+          // Reconcile dropdown selection reference to avoid assertion crashes
+          if (_selPettyCash != null) {
+            final match = _history.firstWhere(
+              (h) => h['id'] == _selPettyCash!['id'],
+              orElse: () => {},
+            );
+            _selPettyCash = match.isNotEmpty ? match : null;
+          }
         });
       } else {
         setState(() => _historyError = json['message'] ?? 'Failed to load');
@@ -464,6 +504,7 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
                   _sectionTitle('Expense Type *'),
                   DropdownButtonFormField<Map<String, dynamic>>(
                     key: ValueKey('expType_$_formVersion'),
+                    isExpanded: true,
                     initialValue: _selExpType,
                     hint: const Text('Select Expense Type'),
                     decoration: InputDecoration(
@@ -486,6 +527,7 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
                   _sectionTitle('Project *'),
                   DropdownButtonFormField<Map<String, dynamic>>(
                     key: ValueKey('project_$_formVersion'),
+                    isExpanded: true,
                     initialValue: _selProject,
                     hint: const Text('Select Project'),
                     decoration: InputDecoration(
@@ -501,6 +543,37 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
                       child: Text(t['name']?.toString() ?? ''),
                     )).toList(),
                     onChanged: (v) => setState(() => _selProject = v),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Link to Petty Cash Request
+                  _sectionTitle('Link Petty Cash Request (Optional)'),
+                  DropdownButtonFormField<Map<String, dynamic>>(
+                    key: ValueKey('pettyCash_$_formVersion'),
+                    isExpanded: true,
+                    initialValue: _selPettyCash,
+                    hint: const Text('Select Petty Cash Request'),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.account_balance_wallet_rounded, color: Colors.teal, size: 20),
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Colors.teal, width: 1.5)),
+                    ),
+                    items: _history.map((h) {
+                      final amount = h['requested_amount']?.toString() ?? '0';
+                      final status = h['status_label']?.toString() ?? '';
+                      String dateStr = '';
+                      try {
+                        dateStr = DateFormat('dd MMM yy').format(DateTime.parse(h['created_at']?.toString() ?? ''));
+                      } catch (_) {}
+                      return DropdownMenuItem<Map<String, dynamic>>(
+                        value: h,
+                        child: Text('₹$amount — $status ($dateStr)', overflow: TextOverflow.ellipsis),
+                      );
+                    }).toList(),
+                    onChanged: (v) => setState(() => _selPettyCash = v),
                   ),
                   const SizedBox(height: 16),
 
@@ -530,6 +603,7 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
                     _sectionTitle('Company *'),
                     DropdownButtonFormField<Map<String, dynamic>>(
                       key: ValueKey('company_$_formVersion'),
+                      isExpanded: true,
                       initialValue: _selCompany,
                       hint: const Text('Select Company'),
                       decoration: InputDecoration(
@@ -802,18 +876,43 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
     return SizedBox(
       width: double.infinity,
       height: 52,
-      child: ElevatedButton.icon(
+      child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
         onPressed: loading ? null : onTap,
-        icon: loading
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-            : Icon(icon, color: Colors.white),
-        label: Text(loading ? 'Submitting...' : label,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            loading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                : Icon(icon, color: Colors.white),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                loading ? 'Submitting...' : label,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

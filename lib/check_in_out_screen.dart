@@ -27,6 +27,7 @@ import 'vhs_expenses_screen.dart';
 import 'more_screen.dart';
 import 'emp_profile.dart';
 import 'vhs_overtime_screen.dart';
+import 'vhs_regularization_screen.dart';
 import 'services/api_service.dart';
 
 // Global notification plugin for foreground
@@ -2356,8 +2357,12 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
 
       // â”€â”€ Late check-in detection (hospital/VHS accounts only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (_isVHS) {
-        await _checkAndHandleLateCheckIn();
+        final proceed = await _checkAndHandleLateCheckIn();
         if (!mounted) return;
+        if (!proceed) {
+          _safeSetState(() { isProcessingCheckIn = false; isProcessing = false; });
+          return;
+        }
       }
       // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -2990,115 +2995,64 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
     return 'Good Evening';
   }
 
-  /// Shows a late check-in reason dialog if the employee is checking in more
-  /// than 15 minutes after their selected shift's start time, then silently
-  /// submits an OT/Late request so the manager can approve/reject it.
-  Future<void> _checkAndHandleLateCheckIn() async {
-    if (selectedShift == null) return;
+  String _fmtDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    if (h > 0) return '$h hr $m min';
+    return '$m min';
+  }
+
+  /// VHS only: simple late check-in notice — no reason input.
+  /// Returns true = proceed, false = user cancelled.
+  Future<bool> _checkAndHandleLateCheckIn() async {
+    if (selectedShift == null) return true;
 
     final shiftData = empShifts.firstWhere(
       (s) => s['id'] == selectedShift,
       orElse: () => <String, dynamic>{},
     );
     final DateTime? shiftStart = shiftData['startTime'] as DateTime?;
-    if (shiftStart == null) return;
+    if (shiftStart == null) return true;
 
-    final now = DateTime.now();
-    final lateBy = now.difference(shiftStart);
-    if (lateBy.inMinutes <= 15) return; // on time â€“ nothing to do
+    final lateBy = DateTime.now().difference(shiftStart);
+    if (lateBy.inMinutes <= 15) return true;
 
-    if (!mounted) return;
-    final reasonController = TextEditingController();
+    if (!mounted) return false;
 
-    final submitted = await showDialog<bool>(
+    final proceed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder:
-          (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-            title: Row(
-              children: [
-                Icon(Icons.schedule_rounded, color: Colors.orange.shade700),
-                const SizedBox(width: 8),
-                const Text(
-                  'Late Check-In',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'You are checking in ${lateBy.inMinutes} minute(s) late. '
-                  'Please provide a reason for manager approval.',
-                  style: const TextStyle(fontSize: 14),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: reasonController,
-                  maxLines: 3,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    hintText: 'Reason for late check-in...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    contentPadding: const EdgeInsets.all(12),
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Skip'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange.shade700,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text(
-                  'Submit',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            Icon(Icons.schedule_rounded, color: Colors.orange.shade700),
+            const SizedBox(width: 8),
+            const Text('Late Check-In', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'You are ${_fmtDuration(lateBy)} late.\nYour check-in will be notified to the manager.',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Back'),
           ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade700,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Check In', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
 
-    if (submitted == true && reasonController.text.trim().isNotEmpty) {
-      try {
-        await ApiService.submitOtRequest(
-          empId: widget.empId,
-          authToken: widget.authToken,
-          requestType: 'late_checkin',
-          date: DateFormat('yyyy-MM-dd').format(now),
-          reason: reasonController.text.trim(),
-          duration:
-              '${lateBy.inHours.toString().padLeft(2, '0')}:${(lateBy.inMinutes % 60).toString().padLeft(2, '0')}',
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Late check-in request submitted for manager approval.',
-              ),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } catch (_) {}
-    }
-    reasonController.dispose();
+    return proceed == true;
   }
 
   // Wide horizontal card — icon left, label right (used for full-width cards)
@@ -3563,8 +3517,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                     ),
                                   )
                                   : DropdownButtonFormField<String>(
-                                      key: ValueKey(selectedShift),
-                                      initialValue: selectedShift,
+                                      value: empShifts.any((s) => s['id']?.toString() == selectedShift)
+                                          ? selectedShift
+                                          : null,
                                       hint: Text(
                                         'Select Your Shift',
                                         style: TextStyle(color: Colors.teal.shade700, fontSize: 14),
@@ -3861,6 +3816,23 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                       ),
                                     ),
                                   ],
+                                ),
+                                const SizedBox(height: 12),
+                                // Regularization — full width
+                                _quickCard(
+                                  icon: Icons.edit_calendar_rounded,
+                                  label: 'Regularization',
+                                  color: Colors.indigo,
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => VHSRegularizationScreen(
+                                        empId: widget.empId,
+                                        authToken: widget.authToken,
+                                        empName: widget.empName,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ],

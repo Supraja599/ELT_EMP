@@ -473,8 +473,9 @@ class _LeaveScreenState extends State<LeaveScreen>
                 const SizedBox(height: 16),
 
                 DropdownButtonFormField<String>(
-                  key: ValueKey(selectedLeaveTypeId),
-                  initialValue: selectedLeaveTypeId,
+                  value: leaveTypes.any((t) => t['id'] == selectedLeaveTypeId)
+                      ? selectedLeaveTypeId
+                      : null,
                   hint: const Text('Select Leave Type'),
                   decoration: InputDecoration(
                     labelText: 'Leave Type',

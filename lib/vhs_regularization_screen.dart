@@ -3,25 +3,23 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'services/api_service.dart';
 
-class VHSOvertimeScreen extends StatefulWidget {
+class VHSRegularizationScreen extends StatefulWidget {
   final String empId;
   final String authToken;
   final String empName;
-  final List<Map<String, dynamic>> empShifts;
 
-  const VHSOvertimeScreen({
+  const VHSRegularizationScreen({
     super.key,
     required this.empId,
     required this.authToken,
     required this.empName,
-    required this.empShifts,
   });
 
   @override
-  State<VHSOvertimeScreen> createState() => _VHSOvertimeScreenState();
+  State<VHSRegularizationScreen> createState() => _VHSRegularizationScreenState();
 }
 
-class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
+class _VHSRegularizationScreenState extends State<VHSRegularizationScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
@@ -29,14 +27,11 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
   final _dateCtrl     = TextEditingController();
   final _checkinCtrl  = TextEditingController();
   final _checkoutCtrl = TextEditingController();
-  final _otDisplayCtrl = TextEditingController(); // shows "X hr Y min"
-
-  int? _otMinutesRaw; // actual minutes sent to API
+  final _reasonCtrl   = TextEditingController();
 
   DateTime? _selectedDate;
   DateTime? _checkinDateTime;
   DateTime? _checkoutDateTime;
-  String?   _selectedShiftId;
   bool _isSubmitting = false;
 
   // ── History state ────────────────────────────────────────────────────────
@@ -48,9 +43,7 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
-      if (_tabController.index == 1 && _records.isEmpty) {
-        _fetchHistory();
-      }
+      if (_tabController.index == 1 && _records.isEmpty) _fetchHistory();
     });
     final now = DateTime.now();
     _selectedDate = now;
@@ -63,33 +56,29 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
     _dateCtrl.dispose();
     _checkinCtrl.dispose();
     _checkoutCtrl.dispose();
-    _otDisplayCtrl.dispose();
+    _reasonCtrl.dispose();
     super.dispose();
   }
 
-  // ── Pick Date ─────────────────────────────────────────────────────────────
+  // ── Pickers ───────────────────────────────────────────────────────────────
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate ?? DateTime.now(),
       firstDate: DateTime.now().subtract(const Duration(days: 90)),
-      lastDate: DateTime.now().add(const Duration(days: 7)),
+      lastDate: DateTime.now(),
     );
     if (picked == null) return;
     setState(() {
       _selectedDate = picked;
       _dateCtrl.text = DateFormat('yyyy-MM-dd').format(picked);
-      // Reset check-in/out when date changes
       _checkinDateTime = null;
       _checkoutDateTime = null;
       _checkinCtrl.clear();
       _checkoutCtrl.clear();
-      _otDisplayCtrl.clear();
-      _otMinutesRaw = null;
     });
   }
 
-  // ── Pick DateTime (date already fixed, just pick time) ───────────────────
   Future<void> _pickTime({required bool isCheckin}) async {
     final baseDate = _selectedDate ?? DateTime.now();
     final initial = isCheckin
@@ -107,8 +96,7 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
     if (time == null) return;
 
     DateTime dt = DateTime(baseDate.year, baseDate.month, baseDate.day, time.hour, time.minute);
-
-    // If checkout is before or same as checkin, assume next day
+    // If checkout is before/equal to checkin, assume next day
     if (!isCheckin && _checkinDateTime != null && !dt.isAfter(_checkinDateTime!)) {
       dt = dt.add(const Duration(days: 1));
     }
@@ -121,63 +109,44 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
         _checkoutDateTime = dt;
         _checkoutCtrl.text = DateFormat('yyyy-MM-dd HH:mm:ss').format(dt);
       }
-      _autoCalcOtMinutes();
     });
-  }
-
-  void _autoCalcOtMinutes() {
-    if (_checkinDateTime != null && _checkoutDateTime != null) {
-      final diff = _checkoutDateTime!.difference(_checkinDateTime!).inMinutes;
-      if (diff > 0) {
-        _otMinutesRaw = diff;
-        final h = diff ~/ 60;
-        final m = diff % 60;
-        _otDisplayCtrl.text = h > 0 ? '$h hr $m min' : '$m min';
-      }
-    }
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
   Future<void> _submit() async {
-    if (_selectedShiftId == null) {
-      _snack('Please select a shift', isError: true); return;
-    }
     if (_checkinDateTime == null) {
-      _snack('Please select check-in time', isError: true); return;
+      _snack('Please select requested check-in time', isError: true); return;
     }
     if (_checkoutDateTime == null) {
-      _snack('Please select check-out time', isError: true); return;
+      _snack('Please select requested check-out time', isError: true); return;
     }
-    final otMin = _otMinutesRaw;
-    if (otMin == null || otMin <= 0) {
-      _snack('Please select check-in and check-out times first', isError: true); return;
+    if (_reasonCtrl.text.trim().isEmpty) {
+      _snack('Please enter a reason', isError: true); return;
     }
 
     setState(() => _isSubmitting = true);
     try {
-      final response = await ApiService.createOvertimeVHS(
+      final res = await ApiService.applyRegularization(
         authToken: widget.authToken,
         empId: widget.empId,
-        date: _dateCtrl.text,
-        shiftId: _selectedShiftId!,
-        checkinTime: _checkinCtrl.text,
-        checkoutTime: _checkoutCtrl.text,
-        otMinutes: otMin,
+        attendanceDate: _dateCtrl.text,
+        requestedCheckin: _checkinCtrl.text,
+        requestedCheckout: _checkoutCtrl.text,
+        reason: _reasonCtrl.text.trim(),
       );
-      final data = jsonDecode(response.body);
+      final data = jsonDecode(res.body);
       if (data['status'] == 'success') {
-        _snack(data['message'] ?? 'Overtime request submitted successfully.');
-        // Reset form
+        _snack(data['message'] ?? 'Regularization request submitted successfully.');
         setState(() {
-          _selectedShiftId = null;
+          final now = DateTime.now();
+          _selectedDate = now;
+          _dateCtrl.text = DateFormat('yyyy-MM-dd').format(now);
           _checkinDateTime = null;
           _checkoutDateTime = null;
           _checkinCtrl.clear();
           _checkoutCtrl.clear();
-          _otDisplayCtrl.clear();
-          _otMinutesRaw = null;
+          _reasonCtrl.clear();
         });
-        // Refresh history and switch to it
         await _fetchHistory();
         _tabController.animateTo(1);
       } else {
@@ -186,26 +155,26 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
     } catch (_) {
       _snack('Network error. Please try again.', isError: true);
     }
-    setState(() => _isSubmitting = false);
+    if (mounted) setState(() => _isSubmitting = false);
   }
 
-  // ── Fetch History ─────────────────────────────────────────────────────────
+  // ── History ───────────────────────────────────────────────────────────────
   Future<void> _fetchHistory() async {
     setState(() => _isLoadingHistory = true);
     try {
-      final response = await ApiService.fetchOvertimeListVHS(
+      final res = await ApiService.fetchRegularizationStatus(
         authToken: widget.authToken,
         empId: widget.empId,
       );
-      final data = jsonDecode(response.body);
+      final data = jsonDecode(res.body);
       if (data['status'] == 'success') {
-        final List raw = data['overtime_records'] ?? [];
+        final List raw = data['requests'] ?? [];
         setState(() {
           _records = raw.map((e) => Map<String, dynamic>.from(e)).toList();
         });
       }
     } catch (_) {}
-    setState(() => _isLoadingHistory = false);
+    if (mounted) setState(() => _isLoadingHistory = false);
   }
 
   void _snack(String msg, {bool isError = false}) {
@@ -224,7 +193,7 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
         title: const Text(
-          'Overtime Request',
+          'Regularization',
           style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.white,
@@ -232,25 +201,25 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
         iconTheme: const IconThemeData(color: Colors.black87),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.purple,
-          labelColor: Colors.purple,
+          indicatorColor: Colors.indigo,
+          labelColor: Colors.indigo,
           unselectedLabelColor: Colors.grey,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold),
           tabs: const [
-            Tab(icon: Icon(Icons.add_circle_outline), text: 'Submit OT'),
-            Tab(icon: Icon(Icons.history_rounded),    text: 'OT Records'),
+            Tab(icon: Icon(Icons.edit_calendar_rounded), text: 'Apply'),
+            Tab(icon: Icon(Icons.history_rounded),        text: 'History'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [_buildSubmitTab(), _buildHistoryTab()],
+        children: [_buildApplyTab(), _buildHistoryTab()],
       ),
     );
   }
 
-  // ── Submit Tab ─────────────────────────────────────────────────────────────
-  Widget _buildSubmitTab() {
+  // ── Apply Tab ──────────────────────────────────────────────────────────────
+  Widget _buildApplyTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -259,18 +228,19 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.purple.withValues(alpha: 0.07),
+              color: Colors.indigo.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
+              border: Border.all(color: Colors.indigo.withValues(alpha: 0.2)),
             ),
             child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline_rounded, color: Colors.purple, size: 20),
+                Icon(Icons.info_outline_rounded, color: Colors.indigo, size: 20),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Submit your overtime request for manager approval. OT minutes are auto-calculated from your selected times.',
-                    style: TextStyle(fontSize: 13, color: Colors.purple),
+                    'Apply regularization if you missed check-in or check-out. Your request will be reviewed by the admin.',
+                    style: TextStyle(fontSize: 13, color: Colors.indigo),
                   ),
                 ),
               ],
@@ -295,74 +265,51 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('OT Details', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                const Text('Attendance Details',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
 
-                // Date
+                // Attendance Date
                 GestureDetector(
                   onTap: _pickDate,
                   child: AbsorbPointer(
                     child: TextField(
                       controller: _dateCtrl,
-                      decoration: _inputDeco('Date *', Icons.calendar_today_rounded),
+                      decoration: _inputDeco('Attendance Date *', Icons.calendar_today_rounded),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
 
-                // Shift
-                DropdownButtonFormField<String>(
-                  value: widget.empShifts.any((s) => s['id']?.toString() == _selectedShiftId)
-                      ? _selectedShiftId
-                      : null,
-                  hint: const Text('Select Shift'),
-                  decoration: InputDecoration(
-                    labelText: 'Shift *',
-                    prefixIcon: Icon(Icons.badge_rounded, color: Colors.purple.shade400, size: 20),
-                    filled: true,
-                    fillColor: const Color(0xFFF9FAFB),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.purple.shade400, width: 1.5)),
-                    labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                  ),
-                  items: widget.empShifts.map((s) => DropdownMenuItem<String>(
-                    value: s['id']?.toString() ?? '',
-                    child: Text(s['name']?.toString() ?? ''),
-                  )).toList(),
-                  onChanged: (v) => setState(() => _selectedShiftId = v),
-                ),
-                const SizedBox(height: 16),
-
-                // Check-in time
+                // Requested Check-in
                 GestureDetector(
                   onTap: () => _pickTime(isCheckin: true),
                   child: AbsorbPointer(
                     child: TextField(
                       controller: _checkinCtrl,
-                      decoration: _inputDeco('Check-in Time *', Icons.login_rounded),
+                      decoration: _inputDeco('Requested Check-in *', Icons.login_rounded),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
 
-                // Check-out time
+                // Requested Check-out
                 GestureDetector(
                   onTap: () => _pickTime(isCheckin: false),
                   child: AbsorbPointer(
                     child: TextField(
                       controller: _checkoutCtrl,
-                      decoration: _inputDeco('Check-out Time *', Icons.logout_rounded),
+                      decoration: _inputDeco('Requested Check-out *', Icons.logout_rounded),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
 
-                // OT Duration (auto-calculated, read-only)
+                // Reason
                 TextField(
-                  controller: _otDisplayCtrl,
-                  readOnly: true,
-                  decoration: _inputDeco('OT Duration (auto-calculated)', Icons.timer_rounded),
+                  controller: _reasonCtrl,
+                  maxLines: 3,
+                  decoration: _inputDeco('Reason *', Icons.notes_rounded),
                 ),
                 const SizedBox(height: 24),
 
@@ -372,17 +319,21 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
                   height: 52,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple,
+                      backgroundColor: Colors.indigo,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       elevation: 0,
                     ),
                     onPressed: _isSubmitting ? null : _submit,
                     icon: _isSubmitting
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                          )
                         : const Icon(Icons.send_rounded, color: Colors.white),
                     label: Text(
-                      _isSubmitting ? 'Submitting...' : 'Submit for Approval',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                      _isSubmitting ? 'Submitting...' : 'Submit Request',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
                 ),
@@ -394,23 +345,10 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
     );
   }
 
-  InputDecoration _inputDeco(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-      prefixIcon: Icon(icon, color: Colors.purple.shade400, size: 20),
-      filled: true,
-      fillColor: const Color(0xFFF9FAFB),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.purple.shade400, width: 1.5)),
-    );
-  }
-
   // ── History Tab ────────────────────────────────────────────────────────────
   Widget _buildHistoryTab() {
     if (_isLoadingHistory) {
-      return const Center(child: CircularProgressIndicator(color: Colors.purple));
+      return const Center(child: CircularProgressIndicator(color: Colors.indigo));
     }
     if (_records.isEmpty) {
       return Center(
@@ -419,19 +357,20 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
           children: [
             Icon(Icons.inbox_rounded, size: 72, color: Colors.grey.shade300),
             const SizedBox(height: 12),
-            const Text('No overtime records yet', style: TextStyle(color: Colors.grey, fontSize: 15)),
+            const Text('No regularization records yet',
+                style: TextStyle(color: Colors.grey, fontSize: 15)),
             const SizedBox(height: 16),
             TextButton.icon(
               onPressed: _fetchHistory,
-              icon: const Icon(Icons.refresh_rounded, color: Colors.purple),
-              label: const Text('Refresh', style: TextStyle(color: Colors.purple)),
+              icon: const Icon(Icons.refresh_rounded, color: Colors.indigo),
+              label: const Text('Refresh', style: TextStyle(color: Colors.indigo)),
             ),
           ],
         ),
       );
     }
     return RefreshIndicator(
-      color: Colors.purple,
+      color: Colors.indigo,
       onRefresh: _fetchHistory,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
@@ -442,14 +381,12 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
   }
 
   Widget _buildRecordCard(Map<String, dynamic> rec) {
-    final date      = rec['date']?.toString() ?? '';
-    final shiftName = rec['shift_name']?.toString() ?? '';
-    final shiftTime = rec['shift_time']?.toString() ?? '';
-    final checkin   = rec['checkin_time']?.toString() ?? '';
-    final checkout  = rec['checkout_time']?.toString() ?? '';
-    final otMin     = rec['ot_minutes']?.toString() ?? '0';
-    final status    = (rec['status']?.toString() ?? 'pending').toLowerCase();
-    final createdAt = rec['created_at']?.toString() ?? '';
+    final attendanceDate  = rec['attendance_date']?.toString() ?? '';
+    final reqCheckin      = rec['requested_checkin']?.toString() ?? '';
+    final reqCheckout     = rec['requested_checkout']?.toString() ?? '';
+    final reason          = rec['reason']?.toString() ?? '';
+    final status          = (rec['status']?.toString() ?? 'pending').toLowerCase();
+    final createdAt       = rec['created_at']?.toString() ?? '';
 
     Color statusColor;
     switch (status) {
@@ -458,23 +395,17 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
       default:         statusColor = Colors.orange;
     }
 
-    String displayDate = date;
-    try { displayDate = DateFormat('dd MMM yyyy').format(DateTime.parse(date)); } catch (_) {}
-
-    String displayCheckin  = _formatTime(checkin);
-    String displayCheckout = _formatTime(checkout);
-
-    final totalMin = int.tryParse(otMin) ?? 0;
-    final hh = totalMin ~/ 60;
-    final mm = totalMin % 60;
-    final otDisplay = hh > 0 ? '$hh hr $mm min' : '$mm min';
+    String displayDate = attendanceDate;
+    try { displayDate = DateFormat('dd MMM yyyy').format(DateTime.parse(attendanceDate)); } catch (_) {}
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
       ),
       child: Column(
         children: [
@@ -482,7 +413,7 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.purple.withValues(alpha: 0.07),
+              color: Colors.indigo.withValues(alpha: 0.07),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Row(
@@ -490,20 +421,16 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: Colors.purple.withValues(alpha: 0.15),
+                    color: Colors.indigo.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(Icons.more_time_rounded, color: Colors.purple.shade700, size: 18),
+                  child: Icon(Icons.edit_calendar_rounded, color: Colors.indigo.shade700, size: 18),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(displayDate, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
-                      if (shiftName.isNotEmpty)
-                        Text('$shiftName  $shiftTime', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                    ],
+                  child: Text(
+                    displayDate,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
                   ),
                 ),
                 Container(
@@ -521,22 +448,35 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    _infoChip(Icons.login_rounded, 'In', displayCheckin, Colors.green),
+                    _infoChip(Icons.login_rounded,  'Check-in',  _fmtTime(reqCheckin),  Colors.green),
                     const SizedBox(width: 8),
-                    _infoChip(Icons.logout_rounded, 'Out', displayCheckout, Colors.red),
-                    const SizedBox(width: 8),
-                    _infoChip(Icons.timer_rounded, 'OT', otDisplay, Colors.purple),
+                    _infoChip(Icons.logout_rounded, 'Check-out', _fmtTime(reqCheckout), Colors.red),
                   ],
                 ),
+                if (reason.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.notes_rounded, size: 14, color: Colors.grey.shade500),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(reason,
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                      ),
+                    ],
+                  ),
+                ],
                 if (createdAt.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Align(
                     alignment: Alignment.centerRight,
                     child: Text(
-                      'Submitted: ${_formatCreatedAt(createdAt)}',
+                      'Submitted: ${_fmtCreatedAt(createdAt)}',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ),
@@ -569,20 +509,27 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
     );
   }
 
-  String _formatTime(String raw) {
-    try {
-      final dt = DateTime.parse(raw).toLocal();
-      return DateFormat('hh:mm a').format(dt);
-    } catch (_) {
-      return raw;
-    }
+  InputDecoration _inputDeco(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+      prefixIcon: Icon(icon, color: Colors.indigo, size: 20),
+      filled: true,
+      fillColor: const Color(0xFFF9FAFB),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.indigo.shade400, width: 1.5)),
+    );
   }
 
-  String _formatCreatedAt(String raw) {
-    try {
-      return DateFormat('dd MMM, hh:mm a').format(DateTime.parse(raw).toLocal());
-    } catch (_) {
-      return raw;
-    }
+  String _fmtTime(String raw) {
+    try { return DateFormat('hh:mm a').format(DateTime.parse(raw).toLocal()); } catch (_) { return raw; }
+  }
+
+  String _fmtCreatedAt(String raw) {
+    try { return DateFormat('dd MMM, hh:mm a').format(DateTime.parse(raw).toLocal()); } catch (_) { return raw; }
   }
 }

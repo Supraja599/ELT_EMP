@@ -796,6 +796,43 @@ class ApiService {
     );
   }
 
+  /// Employee Regularization: Apply
+  /// POST /api/regularization/apply
+  static Future<http.Response> applyRegularization({
+    required String authToken,
+    required String empId,
+    required String attendanceDate,
+    required String requestedCheckin,
+    required String requestedCheckout,
+    required String reason,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/regularization/apply',
+      authToken: authToken,
+      body: {
+        'auth_token': authToken,
+        'emp_id': empId,
+        'attendance_date': attendanceDate,
+        'requested_checkin': requestedCheckin,
+        'requested_checkout': requestedCheckout,
+        'reason': reason,
+      },
+    );
+  }
+
+  /// Employee Regularization: Status / History
+  /// POST /api/regularization/status
+  static Future<http.Response> fetchRegularizationStatus({
+    required String authToken,
+    required String empId,
+  }) {
+    return _postWithAutoRetry(
+      url: '$baseUrl/regularization/status',
+      authToken: authToken,
+      body: {'auth_token': authToken, 'emp_id': empId},
+    );
+  }
+
   /// VHS Regularization Admin: Fetch all pending regularization records
   /// POST /api/adminrequests/pendingRegularizations
   static Future<http.Response> fetchAdminRegularizationVHS({
