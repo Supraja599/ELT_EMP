@@ -82,6 +82,16 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController passwordController = TextEditingController();
   bool isLoading = false;
   bool isPasswordVisible = false;
+  String? _savedCompanyLogo;
+
+  bool get _isVHS {
+    if (_savedCompanyLogo == null) return false;
+    final logo = _savedCompanyLogo!.toLowerCase();
+    return logo.contains('vhs') ||
+        logo.contains('visakha') ||
+        logo.contains('hospital') ||
+        logo.contains('vhc');
+  }
 
 
   @override
@@ -97,6 +107,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final prefs = await SharedPreferences.getInstance();
     final savedUserId = prefs.getString('savedUserId') ?? '';
     final savedPassword = prefs.getString('savedPassword') ?? '';
+    setState(() {
+      _savedCompanyLogo = prefs.getString('companyLogo');
+    });
     if (savedUserId.isNotEmpty && userIdController.text.isEmpty) {
       userIdController.text = savedUserId;
     }
@@ -388,12 +401,38 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Topmost Logo
-                Image.asset(
-                  'assets/eltrive_logo.png',
-                  height: 155,
-                  fit: BoxFit.contain,
-                ),
+                 // Topmost Logo (Dynamic Company Logo or Default Eltrive Logo)
+                _isVHS
+                    ? Image.asset(
+                        'assets/vhs_name_rbg.png', // Background removed local transparent logo
+                        height: 155,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Image.asset(
+                            'assets/vhs_logo.png',
+                            height: 155,
+                            fit: BoxFit.contain,
+                          );
+                        },
+                      )
+                    : _savedCompanyLogo != null && _savedCompanyLogo!.isNotEmpty
+                        ? Image.network(
+                            _savedCompanyLogo!,
+                            height: 155,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Image.asset(
+                                'assets/eltrive_logo.png',
+                                height: 155,
+                                fit: BoxFit.contain,
+                              );
+                            },
+                          )
+                        : Image.asset(
+                            'assets/eltrive_logo.png',
+                            height: 155,
+                            fit: BoxFit.contain,
+                          ),
                 const SizedBox(height: 20),
                 Container(
                   width: double.infinity,

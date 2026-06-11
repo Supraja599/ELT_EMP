@@ -2830,26 +2830,12 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
               TextButton(
                 onPressed: () async {
                   final prefs = await SharedPreferences.getInstance();
-                  // Preserve login credentials so silent re-login works next time
-                  final savedUserId = prefs.getString('savedUserId') ?? '';
-                  final savedPassword = prefs.getString('savedPassword') ?? '';
-                  final savedDeviceSerial =
-                      prefs.getString('deviceSerialNumber') ?? '';
-                  final savedFcm = prefs.getString('fcm_token') ?? '';
-                  await prefs.clear();
-                  if (savedUserId.isNotEmpty)
-                    await prefs.setString('savedUserId', savedUserId);
-                  if (savedPassword.isNotEmpty)
-                    await prefs.setString('savedPassword', savedPassword);
-                  if (savedDeviceSerial.isNotEmpty)
-                    await prefs.setString(
-                      'deviceSerialNumber',
-                      savedDeviceSerial,
-                    );
-                  if (savedFcm.isNotEmpty)
-                    await prefs.setString('fcm_token', savedFcm);
+                  // Selective removal of session data to preserve credentials and company branding
+                  await prefs.remove('authToken');
+                  await prefs.remove('empId');
+                  await prefs.remove('userRole');
                   debugPrint(
-                    'Session reset â€” credentials preserved for silent login',
+                    'Session reset — credentials and branding preserved',
                   );
                   _isSessionDialogShowing = false;
                   if (context.mounted) {

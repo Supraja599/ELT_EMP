@@ -873,9 +873,34 @@ class _AdminPageState extends State<AdminPage>
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                barrierDismissible: false,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text('Logout Confirmation'),
+                    content: const Text('Are you sure you want to logout?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  );
+                },
+              ) ?? false;
+
+              if (!confirmed || !context.mounted) return;
+
               final nav = Navigator.of(context);
               final prefs = await SharedPreferences.getInstance();
-              await prefs.clear();
+              await prefs.remove('authToken');
+              await prefs.remove('empId');
+              await prefs.remove('userRole');
               if (!context.mounted) return;
               nav.pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),

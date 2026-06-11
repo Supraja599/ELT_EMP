@@ -135,7 +135,9 @@ class _EmpProfileState extends State<EmpProfile> {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await prefs.remove('authToken');
+    await prefs.remove('empId');
+    await prefs.remove('userRole');
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
