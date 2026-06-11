@@ -802,8 +802,9 @@ class ApiService {
     required String authToken,
     required String empId,
     required String attendanceDate,
-    required String requestedCheckin,
-    required String requestedCheckout,
+    required String shiftName,
+    required String startTime,
+    required String shiftEnd,
     required String reason,
   }) {
     return _postWithAutoRetry(
@@ -813,8 +814,9 @@ class ApiService {
         'auth_token': authToken,
         'emp_id': empId,
         'attendance_date': attendanceDate,
-        'requested_checkin': requestedCheckin,
-        'requested_checkout': requestedCheckout,
+        'shift_name': shiftName,
+        'start_time': startTime,
+        'shift_end': shiftEnd,
         'reason': reason,
       },
     );

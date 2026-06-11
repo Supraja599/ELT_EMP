@@ -543,8 +543,9 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
         final Map<int, String> result = {};
         daysMap.forEach((key, value) {
           final dayNum = int.tryParse(key.replaceAll('day', '')) ?? 0;
-          if (dayNum > 0)
+          if (dayNum > 0) {
             result[dayNum] = (value['status'] ?? 'A').toString().toUpperCase();
+          }
         });
         _safeSetState(() => _calData = result);
       }
