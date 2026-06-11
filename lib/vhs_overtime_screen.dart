@@ -311,14 +311,22 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
                 const SizedBox(height: 16),
 
                 // Shift
-                DropdownButtonFormField<String>(
-                  value: widget.empShifts.any((s) => s['id']?.toString() == _selectedShiftId)
+                DropdownMenu<String>(
+                  initialSelection: widget.empShifts.any((s) => s['id']?.toString() == _selectedShiftId)
                       ? _selectedShiftId
                       : null,
-                  hint: const Text('Select Shift'),
-                  decoration: InputDecoration(
-                    labelText: 'Shift *',
-                    prefixIcon: Icon(Icons.badge_rounded, color: Colors.purple.shade400, size: 20),
+                  expandedInsets: EdgeInsets.zero,
+                  requestFocusOnTap: false,
+                  label: const Text('Select Shift'),
+                  leadingIcon: Icon(Icons.badge_rounded, color: Colors.purple.shade400, size: 20),
+                  dropdownMenuEntries: widget.empShifts.map((s) {
+                    return DropdownMenuEntry<String>(
+                      value: s['id']?.toString() ?? '',
+                      label: s['name']?.toString() ?? '',
+                    );
+                  }).toList(),
+                  onSelected: (v) => setState(() => _selectedShiftId = v),
+                  inputDecorationTheme: InputDecorationTheme(
                     filled: true,
                     fillColor: const Color(0xFFF9FAFB),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -326,11 +334,6 @@ class _VHSOvertimeScreenState extends State<VHSOvertimeScreen>
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.purple.shade400, width: 1.5)),
                     labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                   ),
-                  items: widget.empShifts.map((s) => DropdownMenuItem<String>(
-                    value: s['id']?.toString() ?? '',
-                    child: Text(s['name']?.toString() ?? ''),
-                  )).toList(),
-                  onChanged: (v) => setState(() => _selectedShiftId = v),
                 ),
                 const SizedBox(height: 16),
 

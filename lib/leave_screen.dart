@@ -472,14 +472,23 @@ class _LeaveScreenState extends State<LeaveScreen>
                 ),
                 const SizedBox(height: 16),
 
-                DropdownButtonFormField<String>(
-                  value: leaveTypes.any((t) => t['id'] == selectedLeaveTypeId)
+                DropdownMenu<String>(
+                  initialSelection: leaveTypes.any((t) => t['id'] == selectedLeaveTypeId)
                       ? selectedLeaveTypeId
                       : null,
-                  hint: const Text('Select Leave Type'),
-                  decoration: InputDecoration(
-                    labelText: 'Leave Type',
-                    prefixIcon: const Icon(Icons.category_rounded, color: Colors.teal, size: 20),
+                  expandedInsets: EdgeInsets.zero,
+                  requestFocusOnTap: false,
+                  label: const Text('Select Leave Type'),
+                  leadingIcon: const Icon(Icons.category_rounded, color: Colors.teal, size: 20),
+                  dropdownMenuEntries: leaveTypes.map((type) {
+                    return DropdownMenuEntry<String>(
+                      value: type['id']!,
+                      label: type['label']!,
+                      leadingIcon: Icon(_leaveTypeIcon(type['id']!), color: Colors.teal, size: 18),
+                    );
+                  }).toList(),
+                  onSelected: (v) => setState(() => selectedLeaveTypeId = v),
+                  inputDecorationTheme: InputDecorationTheme(
                     filled: true,
                     fillColor: const Color(0xFFF9FAFB),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -493,17 +502,6 @@ class _LeaveScreenState extends State<LeaveScreen>
                     ),
                     labelStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                   ),
-                  items: leaveTypes.map((type) => DropdownMenuItem<String>(
-                    value: type['id'],
-                    child: Row(
-                      children: [
-                        Icon(_leaveTypeIcon(type['id']!), color: Colors.teal, size: 18),
-                        const SizedBox(width: 8),
-                        Text(type['label']!),
-                      ],
-                    ),
-                  )).toList(),
-                  onChanged: (v) => setState(() => selectedLeaveTypeId = v),
                 ),
                 const SizedBox(height: 16),
 

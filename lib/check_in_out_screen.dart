@@ -3502,23 +3502,38 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                       ],
                                     ),
                                   )
-                                  : DropdownButtonFormField<String>(
-                                      value: empShifts.any((s) => s['id']?.toString() == selectedShift)
+                                  : DropdownMenu<String>(
+                                      enabled: isShiftSelectable,
+                                      initialSelection: empShifts.any((s) => s['id']?.toString() == selectedShift)
                                           ? selectedShift
                                           : null,
-                                      hint: Text(
+                                      expandedInsets: EdgeInsets.zero,
+                                      requestFocusOnTap: false,
+                                      label: Text(
                                         'Select Your Shift',
                                         style: TextStyle(color: Colors.teal.shade700, fontSize: 14),
                                       ),
-                                      decoration: InputDecoration(
-                                        labelText: 'Select Shift',
-                                        labelStyle: TextStyle(
-                                          color: Colors.teal.shade700,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
-                                        prefixIcon: Icon(Icons.badge_rounded, color: Colors.teal.shade700, size: 22),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      dropdownMenuEntries: empShifts.map((shift) {
+                                        return DropdownMenuEntry<String>(
+                                          value: shift['id']?.toString() ?? '',
+                                          label: shift['name']?.toString() ?? '',
+                                        );
+                                      }).toList(),
+                                      onSelected: (value) async {
+                                        if (value == null || value == selectedShift) return;
+                                        final shiftName = empShifts.firstWhere(
+                                          (s) => s['id']?.toString() == value,
+                                          orElse: () => {'name': 'Unknown'},
+                                        )['name'];
+                                        final confirmed = await _showConfirmationDialog(
+                                          context,
+                                          'Select shift: $shiftName?',
+                                        );
+                                        if (confirmed && mounted) {
+                                          _safeSetState(() => selectedShift = value);
+                                        }
+                                      },
+                                      inputDecorationTheme: InputDecorationTheme(
                                         filled: true,
                                         fillColor: Colors.teal.shade50.withValues(alpha: 0.3),
                                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
@@ -3530,30 +3545,15 @@ class _CheckInOutScreenState extends State<CheckInOutScreen>
                                           borderRadius: BorderRadius.circular(16),
                                           borderSide: BorderSide(color: Colors.teal.shade700, width: 1.5),
                                         ),
-                                      ),
-                                      items: empShifts.map((shift) => DropdownMenuItem<String>(
-                                        value: shift['id']?.toString() ?? '',
-                                        child: Text(
-                                          shift['name']?.toString() ?? '',
-                                          overflow: TextOverflow.ellipsis,
+                                        labelStyle: TextStyle(
+                                          color: Colors.teal.shade700,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
                                         ),
-                                      )).toList(),
-                                      onChanged: isShiftSelectable
-                                          ? (value) async {
-                                              if (value == null || value == selectedShift) return;
-                                              final shiftName = empShifts.firstWhere(
-                                                (s) => s['id'] == value,
-                                                orElse: () => {'name': 'Unknown'},
-                                              )['name'];
-                                              final confirmed = await _showConfirmationDialog(
-                                                context,
-                                                'Select shift: $shiftName?',
-                                              );
-                                              if (confirmed && mounted) {
-                                                _safeSetState(() => selectedShift = value);
-                                              }
-                                            }
-                                          : null,
+                                        prefixIconColor: Colors.teal.shade700,
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                      ),
+                                      leadingIcon: Icon(Icons.badge_rounded, color: Colors.teal.shade700, size: 22),
                                     ),
                         ),
                         const SizedBox(height: 8),

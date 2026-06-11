@@ -502,78 +502,85 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
                 children: [
                   // Expense Type
                   _sectionTitle('Expense Type *'),
-                  DropdownButtonFormField<Map<String, dynamic>>(
+                  DropdownMenu<Map<String, dynamic>>(
                     key: ValueKey('expType_$_formVersion'),
-                    isExpanded: true,
-                    initialValue: _selExpType,
-                    hint: const Text('Select Expense Type'),
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.category_rounded, color: Colors.teal, size: 20),
+                    expandedInsets: EdgeInsets.zero,
+                    requestFocusOnTap: false,
+                    initialSelection: _selExpType,
+                    label: const Text('Select Expense Type'),
+                    leadingIcon: const Icon(Icons.category_rounded, color: Colors.teal, size: 20),
+                    dropdownMenuEntries: _expenseTypes.map((t) {
+                      return DropdownMenuEntry<Map<String, dynamic>>(
+                        value: t,
+                        label: t['name']?.toString() ?? '',
+                      );
+                    }).toList(),
+                    onSelected: (v) => setState(() => _selExpType = v),
+                    inputDecorationTheme: InputDecorationTheme(
                       filled: true,
                       fillColor: const Color(0xFFF9FAFB),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
                       focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Colors.teal, width: 1.5)),
                     ),
-                    items: _expenseTypes.map((t) => DropdownMenuItem<Map<String, dynamic>>(
-                      value: t,
-                      child: Text(t['name']?.toString() ?? ''),
-                    )).toList(),
-                    onChanged: (v) => setState(() => _selExpType = v),
                   ),
                   const SizedBox(height: 16),
 
                   // Project
                   _sectionTitle('Project *'),
-                  DropdownButtonFormField<Map<String, dynamic>>(
+                  DropdownMenu<Map<String, dynamic>>(
                     key: ValueKey('project_$_formVersion'),
-                    isExpanded: true,
-                    initialValue: _selProject,
-                    hint: const Text('Select Project'),
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.work_rounded, color: Colors.teal, size: 20),
+                    expandedInsets: EdgeInsets.zero,
+                    requestFocusOnTap: false,
+                    initialSelection: _selProject,
+                    label: const Text('Select Project'),
+                    leadingIcon: const Icon(Icons.work_rounded, color: Colors.teal, size: 20),
+                    dropdownMenuEntries: _projectTypes.map((t) {
+                      return DropdownMenuEntry<Map<String, dynamic>>(
+                        value: t,
+                        label: t['name']?.toString() ?? '',
+                      );
+                    }).toList(),
+                    onSelected: (v) => setState(() => _selProject = v),
+                    inputDecorationTheme: InputDecorationTheme(
                       filled: true,
                       fillColor: const Color(0xFFF9FAFB),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
                       focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Colors.teal, width: 1.5)),
                     ),
-                    items: _projectTypes.map((t) => DropdownMenuItem<Map<String, dynamic>>(
-                      value: t,
-                      child: Text(t['name']?.toString() ?? ''),
-                    )).toList(),
-                    onChanged: (v) => setState(() => _selProject = v),
                   ),
                   const SizedBox(height: 16),
 
                   // Link to Petty Cash Request
                   _sectionTitle('Link Petty Cash Request (Optional)'),
-                  DropdownButtonFormField<Map<String, dynamic>>(
+                  DropdownMenu<Map<String, dynamic>>(
                     key: ValueKey('pettyCash_$_formVersion'),
-                    isExpanded: true,
-                    initialValue: _selPettyCash,
-                    hint: const Text('Select Petty Cash Request'),
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.account_balance_wallet_rounded, color: Colors.teal, size: 20),
-                      filled: true,
-                      fillColor: const Color(0xFFF9FAFB),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-                      focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Colors.teal, width: 1.5)),
-                    ),
-                    items: _history.map((h) {
+                    expandedInsets: EdgeInsets.zero,
+                    requestFocusOnTap: false,
+                    initialSelection: _selPettyCash,
+                    label: const Text('Select Petty Cash Request'),
+                    leadingIcon: const Icon(Icons.account_balance_wallet_rounded, color: Colors.teal, size: 20),
+                    dropdownMenuEntries: _history.map((h) {
                       final amount = h['requested_amount']?.toString() ?? '0';
                       final status = h['status_label']?.toString() ?? '';
                       String dateStr = '';
                       try {
                         dateStr = DateFormat('dd MMM yy').format(DateTime.parse(h['created_at']?.toString() ?? ''));
                       } catch (_) {}
-                      return DropdownMenuItem<Map<String, dynamic>>(
+                      return DropdownMenuEntry<Map<String, dynamic>>(
                         value: h,
-                        child: Text('₹$amount — $status ($dateStr)', overflow: TextOverflow.ellipsis),
+                        label: '₹$amount — $status ($dateStr)',
                       );
                     }).toList(),
-                    onChanged: (v) => setState(() => _selPettyCash = v),
+                    onSelected: (v) => setState(() => _selPettyCash = v),
+                    inputDecorationTheme: InputDecorationTheme(
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Colors.teal, width: 1.5)),
+                    ),
                   ),
                   const SizedBox(height: 16),
 
@@ -601,24 +608,27 @@ class _VHSExpensesScreenState extends State<VHSExpensesScreen>
                   if (_gstOn) ...[
                     const SizedBox(height: 12),
                     _sectionTitle('Company *'),
-                    DropdownButtonFormField<Map<String, dynamic>>(
+                    DropdownMenu<Map<String, dynamic>>(
                       key: ValueKey('company_$_formVersion'),
-                      isExpanded: true,
-                      initialValue: _selCompany,
-                      hint: const Text('Select Company'),
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.business_rounded, color: Colors.teal, size: 20),
+                      expandedInsets: EdgeInsets.zero,
+                      requestFocusOnTap: false,
+                      initialSelection: _selCompany,
+                      label: const Text('Select Company'),
+                      leadingIcon: const Icon(Icons.business_rounded, color: Colors.teal, size: 20),
+                      dropdownMenuEntries: _companies.map((c) {
+                        return DropdownMenuEntry<Map<String, dynamic>>(
+                          value: c,
+                          label: c['name']?.toString() ?? '',
+                        );
+                      }).toList(),
+                      onSelected: (v) => setState(() => _selCompany = v),
+                      inputDecorationTheme: InputDecorationTheme(
                         filled: true,
                         fillColor: const Color(0xFFF9FAFB),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
                         focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide(color: Colors.teal, width: 1.5)),
                       ),
-                      items: _companies.map((c) => DropdownMenuItem<Map<String, dynamic>>(
-                        value: c,
-                        child: Text(c['name']?.toString() ?? '', overflow: TextOverflow.ellipsis),
-                      )).toList(),
-                      onChanged: (v) => setState(() => _selCompany = v),
                     ),
                   ],
                   const SizedBox(height: 16),
